@@ -10,10 +10,20 @@ Import Logging
 
 Actor Property PlayerRef Auto
 Armor Property HandsArmor Auto
+Armor Property TailArmor Auto
 WinterweightMCM Property WinterMCM Auto
-String[] Property MorphStrings auto
-Float[] Property MorphsHigh auto
-Float[] Property MorphsLow auto
+String[] Property FemaleSliderStrings auto
+Float[] Property FemaleSliderHighs auto
+Float[] Property FemaleSliderLows auto
+
+String[] Property MaleSliderStrings auto
+Float[] Property MaleSliderHighs auto
+Float[] Property MaleSliderLows auto
+
+String[] Property CreatureSliderStrings auto
+Float[] Property CreatureSliderHighs auto
+Float[] Property CreatureSliderLows auto
+
 GlobalVariable Property GameDaysPassed Auto	;Vanilla global.
 GlobalVariable Property DropFeeding Auto
 
@@ -21,13 +31,12 @@ Form[] Property HighValueFood Auto
 Form[] Property NoValueFood Auto
 Keyword Property ActorTypeCreature Auto
 
-;Message property MenuWhitelist auto
-;ReferenceAlias property WhitelistNameAlias auto
 Bool Property ModEnabled = True Auto
 Bool Property PlayerEnabled = True Auto Hidden
 Bool Property NPCsEnabled = True Auto Hidden
 Bool Property ArmNodeChanges = True Auto Hidden
 Bool Property ThighNodeChanges = True Auto Hidden
+Bool Property TailNodeChanges = True Auto Hidden
 Bool Property FemaleNormalChanges = True Auto Hidden
 Bool Property MaleNormalChanges = True Auto Hidden
 Bool Property WeightLossEnabled = True Auto Hidden
@@ -40,14 +49,15 @@ Float Property MaximumWeight = 2.0 Auto Hidden
 Float Property MinimumWeight = -1.0 Auto Hidden
 Float Property ArmNodeFactor = 4.0 Auto Hidden
 Float Property ThighNodeFactor = 4.0 Auto Hidden
+Float Property TailNodeFactor = 16.0 Auto Hidden
 Float Property IngredientBaseGain = 0.04 Auto Hidden
 Float Property PotionBaseGain = 0.02 Auto Hidden
 Float Property FoodBaseGain = 0.10 Auto Hidden
 Float Property VoreBaseGain = 0.03 Auto Hidden
 Float Property HighValueMultiplier = 2.0 Auto Hidden
-TextureSet Property WinterweightSkinBodyFemale Auto
 Quest Property RefactorManager = None Auto Hidden
-;Actor[] property WeightWhitelist auto
+
+Actor[] Property Gainers Auto
 
 String[] Property FemaleNormals Auto Hidden
 String[] Property MaleNormals Auto Hidden
@@ -55,6 +65,8 @@ String Property SettingsFileName = "data\\skse\\plugins\\winterweight\\settings.
 
 String MODKEY = "Winterweight.esp"
 String PREFIX = "WinterweightCore"
+
+String CMETails = "CME Tail Pelvis [Pelv]"
 
 ;Bool DetectedSleepEvent = False
 
@@ -65,7 +77,7 @@ Float LastGameHours = 0.0
 Int Ticks = 0	;Holding variable for Ticks since last processed while we're doing WeightLoss.
 
 Event OnInit()
-	;EventRegistration()
+	EventRegistration()
 	FemaleNormals = New String[3]
 	FemaleNormals[0] = "Actors\\Character\\Female\\FemaleBody_1_msn.dds"
 	FemaleNormals[1] = "Actors\\Character\\Winterweight\\Female\\FemaleBody_chubby1_msn.dds"
@@ -79,11 +91,25 @@ Event OnInit()
 	MaleNormalBreakpoints[1] = 1.0
 	MaleNormalBreakpoints[2] = 1.5
 
-	if MorphStrings.length < 96 || MorphsHigh.length < 96 || MorphsLow.length < 96
-        MorphStrings = Utility.ResizeStringArray(MorphStrings, 96)
-        MorphsHigh = Utility.ResizeFloatArray(MorphsHigh, 96)
-        MorphsLow = Utility.ResizeFloatArray(MorphsLow, 96)
+	if FemaleSliderStrings.length < 128 || FemaleSliderHighs.length < 128 || FemaleSliderLows.length < 128
+        FemaleSliderStrings = Utility.ResizeStringArray(FemaleSliderStrings, 128)
+        FemaleSliderHighs = Utility.ResizeFloatArray(FemaleSliderHighs, 128)
+        FemaleSliderLows = Utility.ResizeFloatArray(FemaleSliderLows, 128)
     endIf
+
+	if MaleSliderStrings.length < 128 || MaleSliderHighs.length < 128 || MaleSliderLows.length < 128
+        MaleSliderStrings = Utility.ResizeStringArray(MaleSliderStrings, 128)
+        MaleSliderHighs = Utility.ResizeFloatArray(MaleSliderHighs, 128)
+        MaleSliderLows = Utility.ResizeFloatArray(MaleSliderLows, 128)
+    endIf
+
+	if CreatureSliderStrings.length < 128 || CreatureSliderHighs.length < 128 || CreatureSliderLows.length < 128
+        CreatureSliderStrings = Utility.ResizeStringArray(CreatureSliderStrings, 128)
+        CreatureSliderHighs = Utility.ResizeFloatArray(CreatureSliderHighs, 128)
+        CreatureSliderLows = Utility.ResizeFloatArray(CreatureSliderLows, 128)
+    endIf
+
+	Gainers = PapyrusUtil.ActorArray(128)
 	
 	RegisterForModEvent("Winterweight_ItemConsume", "ItemConsume")
 	CheckRefactor()	;Checks for Devourment Refactor.
@@ -98,6 +124,10 @@ EndEvent
 
 Function CheckRefactor()
 	RefactorManager = Quest.GetQuest("DevourmentManager")
+	If RefactorManager != None
+		RegisterForModEvent("Devourment_OnDeadDigestion", "DeadDigest")
+        RegisterForModEvent("Devourment_onConsumeItem", "ItemConsume")
+	EndIf
 EndFunction
 
 Function EventRegistration()
@@ -118,8 +148,8 @@ EndFunction
 
 Int Function GetTicks(Float currentTimeInGameHours, Float lastTimeInGameHours)	;This function shamelessly ripped off from CreationClub SurvivalMode Survival_NeedBase.
 	Int returnticks = (currentTimeInGameHours - lastTimeInGameHours) as Int * (1.0 / WeightRate) as Int
-	if returnticks < 0
-		returnticks = 0
+	if returnticks <= 0
+		returnticks = 1
 	endIf
 	Log4(PREFIX, "GetTicks()", "currentTime: " +currentTimeInGameHours, "lastTime: " +lastTimeInGameHours, "weightRate: " +WeightRate, "ticks: " +returnticks)
 	return returnticks
@@ -144,7 +174,13 @@ function NeedUpdateGameTime()
 		Ticks = self.GetTicks(currentTimeInGameHours, LastGameHours)
 		Log3(PREFIX, "NeedUpdateGameTime()", "Processing weight loss. Ticks: " +Ticks, " CurrentTimeInGameHours: " +currentTimeInGameHours, "LastGameHours: " +LastGameHours)
 		LastGameHours = currentTimeInGameHours
-		NiOverride.ForEachMorphedReference("ActorWeightLoss", WinterMCM)
+		Int iIndex = 0
+		While iIndex < Gainers.Length
+			If Gainers[iIndex] != None
+				ActorWeightLoss(Gainers[iIndex])
+			EndIf
+			iIndex += 1
+		EndWhile
 		;Ticks = 0
 	EndIf
 endFunction
@@ -176,6 +212,10 @@ Event ItemConsume(Form consumer, Form itemBase, int count)
 { Event that fires when Actors consume something via Feeding. Also called for Player Equip events. }
 
 	If ModEnabled
+		If consumer == None
+			Return
+		EndIf
+
 		If NoValueFood.Find(itemBase) >= 0
 			ConsoleUtil.PrintMessage(Namer(itemBase) + " has no food value.")
 			Return
@@ -275,15 +315,9 @@ Function ResetActorWeight(Actor target)
 			NiOverride.UpdateModelWeight(target)
 		endIf
 
-		bool isFemale = IsFemale(target)
-		NiOverride.RemoveNodeTransformRotation(target, false, isFemale, "CME R Hip", MODKEY)
-		NiOverride.RemoveNodeTransformRotation(target, false, isFemale, "CME L Hip", MODKEY)
-		NiOverride.RemoveNodeTransformRotation(target, false, isFemale, "CME R Clavicle [RClv]", MODKEY)
-		NiOverride.RemoveNodeTransformRotation(target, false, isFemale, "CME L Clavicle [LClv]", MODKEY)
-		NiOverride.RemoveNodeTransformRotation(target, false, isFemale, "CME R Shoulder", MODKEY)
-		NiOverride.RemoveNodeTransformRotation(target, false, isFemale, "CME L Shoulder", MODKEY)
-		NiOverride.RemoveSkinOverride(target, IsFemale, false, 0x04, 9, 1)
 		StorageUtil.UnSetFloatValue(target, MODKEY)
+
+		FullFeatureUpdate(target, 0.0)
 	endIf
 EndFunction
 
@@ -307,15 +341,20 @@ bool Function IsFemale(Actor target)
 	return target.getLeveledActorBase().getSex()
 EndFunction
 
-Bool Function ChangeActorWeight(Actor target, float afChange, float afSplitThreshold = 0.05)
+Bool Function ChangeActorWeight(Actor target, float afChange, float afSplitThreshold = 0.025)
 { All-purpose function for losing and gaining Weight. }
 
-	If !ModEnabled
+	If !ModEnabled || target == None
 		Return False
 	ElseIf target == PlayerRef && (PlayerEnabled == False)
 		Return False
 	ElseIf target != PlayerRef && (NPCsEnabled == False)
 		Return False
+	EndIf
+
+	If Gainers.Find(target) == -1
+		int iIndex = Gainers.Find(None)
+		Gainers[iIndex] = target
 	EndIf
 	
 	int iAdds = Math.Ceiling(afChange / afSplitThreshold)
@@ -355,10 +394,7 @@ Function FullActorUpdate()
 		While StorageUtil.FloatListCount(NextGainer, MODKEY) > 0
 			Float Delta = StorageUtil.FloatListShift(NextGainer, MODKEY)
 			Current = PapyrusUtil.ClampFloat(Current + Delta, MinimumWeight, MaximumWeight)
-			BodyMorphUpdate(Target, Current)
-			ArmNodeUpdate(Target, Current)
-			ThighNodeUpdate(Target, Current)
-			NormalMapUpdate(Target, Current)
+			FullFeatureUpdate(Target, Current)
 		EndWhile
 		StorageUtil.SetFloatValue(NextGainer, MODKEY, Current)
 		NextGainer = StorageUtil.FormListShift(None, MODKEY)
@@ -368,30 +404,51 @@ Function FullActorUpdate()
 
 EndFunction
 
+Function FullFeatureUpdate(Actor akTarget, Float afWeight)
+{ Convenience function to call all visual features on the Actor to update. }
+
+	BodyMorphUpdate(akTarget, afWeight)
+	ArmNodeUpdate(akTarget, afWeight)
+	ThighNodeUpdate(akTarget, afWeight)
+	TailNodeUpdate(akTarget, afWeight)
+	NormalMapUpdate(akTarget, afWeight)
+EndFunction
+
 Function BodyMorphUpdate(Actor akTarget, Float afWeight)
 
-	int endPoint = 32
+	String[] SliderStrings
+	Float[] SliderLows
+	Float[] SliderHighs
+
 	int iSlider = 0
 	bool isFemale = IsFemale(akTarget)
 
 	If !akTarget.HasKeyword(ActorTypeCreature)
-		If !isFemale
-			iSlider = 32
-			endPoint = 64
+		If isFemale
+			SliderStrings = FemaleSliderStrings
+			SliderLows = FemaleSliderLows
+			SliderHighs = FemaleSliderHighs
+		Else
+			SliderStrings = MaleSliderStrings
+			SliderLows = MaleSliderLows
+			SliderHighs = MaleSliderHighs
 		EndIf
 	Else
-		iSlider = 64
-		endPoint = 96
+		SliderStrings = CreatureSliderStrings
+		SliderLows = CreatureSliderLows
+		SliderHighs = CreatureSliderHighs
 	EndIf
 
+	int endPoint = SliderStrings.Length
+
 	if afWeight < 0.0	;Targets need to be inverted for the sliders to end up at correct values if target is below 0.0 weight.
-		While iSlider < endPoint && MorphStrings[iSlider] != ""
-			NiOverride.SetBodyMorph(akTarget, MorphStrings[iSlider], MODKEY, -afWeight * MorphsLow[iSlider])
+		While iSlider < endPoint && SliderStrings[iSlider] != ""
+			NiOverride.SetBodyMorph(akTarget, SliderStrings[iSlider], MODKEY, -(afWeight / MinimumWeight) * SliderLows[iSlider])
 			iSlider += 1
 		EndWhile
 	else
-		While iSlider < endPoint && MorphStrings[iSlider] != ""
-			NiOverride.SetBodyMorph(akTarget, MorphStrings[iSlider], MODKEY, afWeight * MorphsHigh[iSlider])
+		While iSlider < endPoint && SliderStrings[iSlider] != ""
+			NiOverride.SetBodyMorph(akTarget, SliderStrings[iSlider], MODKEY, (afWeight / MaximumWeight) * SliderHighs[iSlider])
 			iSlider += 1
 		EndWhile
 	endIf
@@ -415,13 +472,21 @@ Function NormalMapUpdate(Actor akTarget, Float afWeight)
 					If !Hands
 						akTarget.EquipItem(HandsArmor, false, true)
 					EndIf
+					If akTarget.HasKeywordString("IsBeastRace")
+						Int TargetRace = akTarget.GetLeveledActorBase().GetRace().GetFormID()
+						;If target race is Argonian, ArgonianVampire, Khajiit or KhajiitVampire.
+						If TargetRace == 79680 || TargetRace == 559162 || TargetRace == 79685 || TargetRace == 559173
+							akTarget.EquipItem(TailArmor, false, true)
+						EndIf
+					EndIf
 					NiOverride.AddSkinOverrideString(akTarget, IsFemale, false, 0x04, 9, 1, FemaleNormals[iIndex], True)
+					
 					;NiOverride.AddSkinOverrideString(akTarget, IsFemale, false, 0x08, 9, 1, "Textures\\Actors\\Character\\Female\\FemaleHands_1_msn.dds", True)
 					;NiOverride.AddSkinOverrideString(akTarget, IsFemale, false, 0x04, 9, 1, "Textures\\"+FemaleNormals[iIndex], True)
 					;NiOverride.AddNodeOverrideTextureSet(akTarget, IsFemale, "3BAv2", 9, 1, WinterweightSkinBodyFemale, True)
 					;NiOverride.AddNodeOverrideString(akTarget, IsFemale, "3BAv2", 9, 1, FemaleNormals[iIndex], False)
 					;NiOverride.ApplyNodeOverrides(akTarget)
-					iIndex = -1
+					iIndex = -1	;We applied a higher Normal, now leave it alone and exit.
 				EndIf
 				iIndex -= 1
 			EndWhile
@@ -434,8 +499,15 @@ Function NormalMapUpdate(Actor akTarget, Float afWeight)
 					If !Hands
 						akTarget.EquipItem(HandsArmor, false, true)
 					EndIf
+					If akTarget.HasKeywordString("IsBeastRace")
+						Int TargetRace = akTarget.GetLeveledActorBase().GetRace().GetFormID()
+						;If target race is Argonian, ArgonianVampire, Khajiit or KhajiitVampire.
+						If TargetRace == 79680 || TargetRace == 559162 || TargetRace == 79685 || TargetRace == 559173
+							akTarget.EquipItem(TailArmor, false, true)
+						EndIf
+					EndIf
 					NiOverride.AddSkinOverrideString(akTarget, IsFemale, false, 0x04, 9, 1, MaleNormals[iIndex], True)
-					iIndex = -1
+					iIndex = -1 ;We applied a higher Normal, now leave it alone and exit.
 				EndIf
 				iIndex -= 1
 			EndWhile
@@ -511,6 +583,29 @@ Function ArmNodeUpdate(Actor akTarget, Float afWeight)
 
 EndFunction
 
+Function TailNodeUpdate(Actor akTarget, Float afWeight)
+
+	If akTarget.HasKeywordString("ActorTypeNPC")
+		bool isFemale = IsFemale(akTarget)
+		If TailNodeChanges
+			Float fPercent = afWeight / MaximumWeight
+			if fpercent < 0.0
+				fpercent = 0.0
+			endif
+			Float[] XYZ = New Float[3]
+			Float fModifier = (TailNodeFactor * fPercent)
+			XYZ[1] = XYZ[1] + fModifier
+			
+			XYZ[2] = XYZ[2] + fModifier	;Up
+			NiOverride.AddNodeTransformPosition(akTarget, False, isFemale, CMETails, MODKEY, XYZ)
+			NiOverride.UpdateNodeTransform(akTarget, false, isFemale, CMETails)
+		Else
+			NiOverride.RemoveNodeTransformPosition(akTarget, False, isFemale, CMETails, MODKEY)
+		EndIf
+	EndIf
+
+EndFunction
+
 bool Function addHighValueFood(Form food)
 	int index = HighValueFood.find(food)
 	if index >= 0 && index < HighValueFood.Length
@@ -555,73 +650,129 @@ endFunction
 
 bool Function addMorph(String name, float multHigh, float multLow, int iType)
 	
-	Int iMorphStart = 0
-	Int iMorphEnd = 32
+	;These iTypes correspond to: 0 female, 1 male, 2 creature.
+	If iType == 0
+		if FemaleSliderStrings.find(name) > -1
+			Debug.MessageBox("That slider is already used in this page.")
+			return false
+		endIf
 	
-	;We divide our Morph arrays up by Female, Male and Creature. 
-	;These iTypes correspond to these "segments", 0 female, 1 male, 2 creature.
-	If iType == 1
-		iMorphStart = 32
-		iMorphEnd = 64
+		Int iIndex = FemaleSliderStrings.find("")
+		If iIndex == -1
+			Debug.MessageBox("You have already used the maximum amount of sliders.")
+			return false
+		EndIf
+	
+		FemaleSliderStrings[iIndex] = name
+		FemaleSliderLows[iIndex] = multLow
+		FemaleSliderHighs[iIndex] = multHigh
+	ElseIf iType == 1
+		if MaleSliderStrings.find(name) > -1
+			Debug.MessageBox("That slider is already used in this page.")
+			return false
+		endIf
+	
+		Int iIndex = MaleSliderStrings.find("")
+		If iIndex == -1
+			Debug.MessageBox("You have already used the maximum amount of sliders.")
+			return false
+		EndIf
+	
+		MaleSliderStrings[iIndex] = name
+		MaleSliderLows[iIndex] = multLow
+		MaleSliderHighs[iIndex] = multHigh
 	ElseIf iType == 2
-		iMorphStart = 64
-		iMorphEnd = 96
+		if CreatureSliderStrings.find(name) > -1
+			Debug.MessageBox("That slider is already used in this page.")
+			return false
+		endIf
+	
+		Int iIndex = CreatureSliderStrings.find("")
+		If iIndex == -1
+			Debug.MessageBox("You have already used the maximum amount of sliders.")
+			return false
+		EndIf
+	
+		CreatureSliderStrings[iIndex] = name
+		CreatureSliderLows[iIndex] = multLow
+		CreatureSliderHighs[iIndex] = multHigh
 	EndIf
-
-	if MorphStrings.find(name, iMorphStart) < iMorphEnd \
-	&& MorphStrings.find(name, iMorphStart) >= iMorphStart
-		;This slider string is already in our segment, reject it.
-		Debug.MessageBox("That slider is already used in this page.")
-        return false
-    endIf
-
-    int index = MorphStrings.find("", iMorphStart)
-	If index < iMorphStart || index >= iMorphEnd
-		;There are no free elements available in this segment.
-		Debug.MessageBox("You have already used the maximum amount of sliders on this page.")
-		return false
-	EndIf
-
-    MorphStrings[index] = name
-    MorphsHigh[index] = multHigh
-    MorphsLow[index] = multLow
 
 	return true
 EndFunction
 
-bool Function removeMorph(int iSliderIndex)
-    MorphStrings[iSliderIndex] = ""
-	MorphsHigh[iSliderIndex] = 0.0
-	MorphsLow[iSliderIndex] = 0.0
+bool Function removeMorph(int iIndex, int iType)
+	;These iTypes correspond to: 0 female, 1 male, 2 creature.
 
-	if iSliderIndex < 32
-		CompactifyMorphs(0, 32)
-	elseif iSliderIndex < 64
-		CompactifyMorphs(32, 32)
-	else
-		CompactifyMorphs(64, 32)
-	endIf
+	If iType == 0
+		FemaleSliderStrings[iIndex] = ""
+		FemaleSliderLows[iIndex] = 0.0
+		FemaleSliderHighs[iIndex] = 0.0
+	ElseIf iType == 1
+		MaleSliderStrings[iIndex] = ""
+		MaleSliderLows[iIndex] = 0.0
+		MaleSliderHighs[iIndex] = 0.0
+	ElseIf iType == 2
+		CreatureSliderStrings[iIndex] = ""
+		CreatureSliderLows[iIndex] = 0.0
+		CreatureSliderHighs[iIndex] = 0.0
+	EndIf
+
+	CompactifyMorphs(iType)
 
     return true
 EndFunction
 
-Function CompactifyMorphs(int first, int count)
-	int firstBlank = MorphStrings.find("", first)
-	int endPoint = first + count
-	int i = firstBlank + 1
-	
-	while i < endPoint
-		if MorphStrings[i] != ""
-			MorphStrings[firstBlank] = MorphStrings[i]
-			MorphsHigh[firstBlank] = MorphsHigh[i]
-			MorphsLow[firstBlank] = MorphsLow[i]
-			MorphStrings[i] = ""
-			MorphsHigh[i] = 0.0
-			MorphsLow[i] = 0.0
-			firstBlank += 1
-		endIf
-		i += 1
-	endWhile
+Function CompactifyMorphs(int iType)
+	If iType == 0
+		Int iFirstBlank = FemaleSliderStrings.find("")
+		Int i = iFirstBlank + 1
+		Int iLength = FemaleSliderStrings.Length
+		while i < iLength
+			if FemaleSliderStrings[i] != ""
+				FemaleSliderStrings[iFirstBlank] = FemaleSliderStrings[i]
+				FemaleSliderHighs[iFirstBlank] = FemaleSliderHighs[i]
+				FemaleSliderLows[iFirstBlank] = FemaleSliderLows[i]
+				FemaleSliderStrings[i] = ""
+				FemaleSliderHighs[i] = 0.0
+				FemaleSliderLows[i] = 0.0
+				iFirstBlank += 1
+			endIf
+			i += 1
+		endWhile
+	ElseIf iType == 1
+		Int iFirstBlank = MaleSliderStrings.find("")
+		Int i = iFirstBlank + 1
+		Int iLength = MaleSliderStrings.Length
+		while i < iLength
+			if MaleSliderStrings[i] != ""
+				MaleSliderStrings[iFirstBlank] = MaleSliderStrings[i]
+				MaleSliderHighs[iFirstBlank] = MaleSliderHighs[i]
+				MaleSliderLows[iFirstBlank] = MaleSliderLows[i]
+				MaleSliderStrings[i] = ""
+				MaleSliderHighs[i] = 0.0
+				MaleSliderLows[i] = 0.0
+				iFirstBlank += 1
+			endIf
+			i += 1
+		endWhile
+	ElseIf iType == 2
+		Int iFirstBlank = CreatureSliderStrings.find("")
+		Int i = iFirstBlank + 1
+		Int iLength = CreatureSliderStrings.Length
+		while i < iLength
+			if CreatureSliderStrings[i] != ""
+				CreatureSliderStrings[iFirstBlank] = CreatureSliderStrings[i]
+				CreatureSliderHighs[iFirstBlank] = CreatureSliderHighs[i]
+				CreatureSliderLows[iFirstBlank] = CreatureSliderLows[i]
+				CreatureSliderStrings[i] = ""
+				CreatureSliderHighs[i] = 0.0
+				CreatureSliderLows[i] = 0.0
+				iFirstBlank += 1
+			endIf
+			i += 1
+		endWhile
+	EndIf
 EndFunction
 
 int Function GetWeightApprox(Actor target)
@@ -809,16 +960,37 @@ Bool Function LoadSettings()
 	FoodBaseGain =			JMap_GetFlt(data, "FoodBaseGain", FoodBaseGain)
 	HighValueMultiplier = 	JMap_GetFlt(data, "HighValueMultiplier", HighValueMultiplier)
 
-	MorphStrings = JArray_asStringArray(JMap_getObj(data, "MorphStrings", JArray_ObjectWithStrings(MorphStrings)))
-	MorphsHigh = JArray_asFloatArray(JMap_getObj(data, "MorphsHigh", JArray_ObjectWithFloats(MorphsHigh)))
-	MorphsLow = JArray_asFloatArray(JMap_getObj(data, "MorphsLow", JArray_ObjectWithFloats(MorphsLow)))
+	FemaleSliderStrings = JArray_asStringArray(JMap_getObj(data, "FemaleSliderStrings", JArray_ObjectWithStrings(FemaleSliderStrings)))
+	FemaleSliderHighs = JArray_asFloatArray(JMap_getObj(data, "FemaleSliderHighs", JArray_ObjectWithFloats(FemaleSliderHighs)))
+	FemaleSliderLows = JArray_asFloatArray(JMap_getObj(data, "FemaleSliderLows", JArray_ObjectWithFloats(FemaleSliderLows)))
+
+	MaleSliderStrings = JArray_asStringArray(JMap_getObj(data, "MaleSliderStrings", JArray_ObjectWithStrings(MaleSliderStrings)))
+	MaleSliderHighs = JArray_asFloatArray(JMap_getObj(data, "MaleSliderHighs", JArray_ObjectWithFloats(MaleSliderHighs)))
+	MaleSliderLows = JArray_asFloatArray(JMap_getObj(data, "MaleSliderLows", JArray_ObjectWithFloats(MaleSliderLows)))
+
+	CreatureSliderStrings = JArray_asStringArray(JMap_getObj(data, "CreatureSliderStrings", JArray_ObjectWithStrings(CreatureSliderStrings)))
+	CreatureSliderHighs = JArray_asFloatArray(JMap_getObj(data, "CreatureSliderHighs", JArray_ObjectWithFloats(CreatureSliderHighs)))
+	CreatureSliderLows = JArray_asFloatArray(JMap_getObj(data, "CreatureSliderLows", JArray_ObjectWithFloats(CreatureSliderLows)))
+
 	HighValueFood = JArray_asFormArray(JMap_getObj(data, "HighValueFood", JArray_ObjectWithForms(HighValueFood)))
 	NoValueFood = JArray_asFormArray(JMap_getObj(data, "NoValueFood", JArray_ObjectWithForms(NoValueFood)))
 
-    if MorphStrings.length < 96 || MorphsHigh.length < 96 || MorphsLow.length < 96
-        MorphStrings = Utility.ResizeStringArray(MorphStrings, 96)
-        MorphsHigh = Utility.ResizeFloatArray(MorphsHigh, 96)
-        MorphsLow = Utility.ResizeFloatArray(MorphsLow, 96)
+    if FemaleSliderStrings.length < 128 || FemaleSliderHighs.length < 128 || FemaleSliderLows.length < 128
+        FemaleSliderStrings = Utility.ResizeStringArray(FemaleSliderStrings, 128)
+        FemaleSliderHighs = Utility.ResizeFloatArray(FemaleSliderHighs, 128)
+        FemaleSliderLows = Utility.ResizeFloatArray(FemaleSliderLows, 128)
+    endIf
+
+	if MaleSliderStrings.length < 128 || MaleSliderHighs.length < 128 || MaleSliderLows.length < 128
+        MaleSliderStrings = Utility.ResizeStringArray(MaleSliderStrings, 128)
+        MaleSliderHighs = Utility.ResizeFloatArray(MaleSliderHighs, 128)
+        MaleSliderLows = Utility.ResizeFloatArray(MaleSliderLows, 128)
+    endIf
+
+	if CreatureSliderStrings.length < 128 || CreatureSliderHighs.length < 128 || CreatureSliderLows.length < 128
+        CreatureSliderStrings = Utility.ResizeStringArray(CreatureSliderStrings, 128)
+        CreatureSliderHighs = Utility.ResizeFloatArray(CreatureSliderHighs, 128)
+        CreatureSliderLows = Utility.ResizeFloatArray(CreatureSliderLows, 128)
     endIf
 	return true
 EndFunction
@@ -835,9 +1007,15 @@ Bool Function SaveSettings()
 	JMap_SetFlt(data, "PotionBaseGain", 		PotionBaseGain)
 	JMap_SetFlt(data, "FoodBaseGain", 			FoodBaseGain)
 	JMap_SetFlt(data, "HighValueMultiplier", 	HighValueMultiplier)
-	JMap_SetObj(data, "MorphStrings", 			JArray_objectWithStrings(MorphStrings))
-	JMap_SetObj(data, "MorphsHigh", 			JArray_objectWithFloats(MorphsHigh))
-	JMap_SetObj(data, "MorphsLow", 				JArray_objectWithFloats(MorphsLow))
+	JMap_SetObj(data, "FemaleSliderStrings", 	JArray_objectWithStrings(FemaleSliderStrings))
+	JMap_SetObj(data, "FemaleSliderHighs", 		JArray_objectWithFloats(FemaleSliderHighs))
+	JMap_SetObj(data, "FemaleSliderLows", 		JArray_objectWithFloats(FemaleSliderLows))
+	JMap_SetObj(data, "MaleSliderStrings", 		JArray_objectWithStrings(MaleSliderStrings))
+	JMap_SetObj(data, "MaleSliderHighs", 		JArray_objectWithFloats(MaleSliderHighs))
+	JMap_SetObj(data, "MaleSliderLows", 		JArray_objectWithFloats(MaleSliderLows))
+	JMap_SetObj(data, "CreatureSliderStrings", 	JArray_objectWithStrings(CreatureSliderStrings))
+	JMap_SetObj(data, "CreatureSliderHighs", 	JArray_objectWithFloats(CreatureSliderHighs))
+	JMap_SetObj(data, "CreatureSliderLows", 	JArray_objectWithFloats(CreatureSliderLows))
 	JMap_SetObj(data, "HighValueFood", 			JArray_objectWithForms(HighValueFood))
 	JMap_SetObj(data, "NoValueFood", 			JArray_objectWithForms(NoValueFood))
 	JValue_writeToFile(data, SettingsFileName)

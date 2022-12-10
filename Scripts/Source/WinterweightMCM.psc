@@ -14,6 +14,11 @@ String MODKEY = "Winterweight.esp"
 String PREFIX = "WinterweightMCM"
 Actor Target
 int optionsMap
+Bool SliderCustomLock = False
+Int[] sliderCustomisation
+String[] FemalePresets
+String[] MalePresets
+Float fTargetWeight
 int ValueOptions = -1
 
 ;/ SKI Code so I remember how version updates go.
@@ -59,6 +64,8 @@ event OnConfigInit()
 	Pages[1] = "Female Morphs"
 	Pages[2] = "Male Morphs"
 	Pages[3] = "Creature Morphs"
+
+	sliderCustomisation = new Int[7]
 endEvent
 
 Actor Function GetTarget()
@@ -79,6 +86,8 @@ Event OnPageReset(string page)
 	GetTarget()	;Fill target var.
 
 	If page == "General Settings" || page == ""
+
+		fTargetWeight = Core.GetCurrentActorWeight(Target)
 
 		SetCursorFillMode(LEFT_TO_RIGHT)
 		AddHeaderOption("Mod Status")
@@ -114,6 +123,8 @@ Event OnPageReset(string page)
 		AddSliderOptionST("ArmNodeFactorState", "Arm Adjustment Strength", Core.ArmNodeFactor, "{2} degrees")
 		AddToggleOptionST("ThighNodeEnabledState", "Thigh Node Changes", Core.ThighNodeChanges)
 		AddSliderOptionST("ThighNodeFactorState", "Thigh Adjustment Strength", Core.ThighNodeFactor, "{2} degrees")
+		AddToggleOptionST("TailNodeEnabledState", "Tail Node Changes", Core.TailNodeChanges)
+		AddSliderOptionST("TailNodeFactorState", "Tail Movement Strength", Core.TailNodeFactor, "{2} units")
 
 		AddHeaderOption("High & No-Value Food")
 		AddEmptyOption()
@@ -157,36 +168,42 @@ Event OnPageReset(string page)
 		AddTextOptionST("ResetOneState", "Reset " +Namer(Target, True)+  "'s Weight", None)
 		AddTextOptionST("ResetAllState", "Reset All Actors Weight Values", None)
 		AddSliderOptionST("SetWeightState", "Set " +Namer(Target, true)+ "'s weight", 0.0, "{2}")
+		AddTextOption(Namer(Target, true)+ "'s Weight: ", fTargetWeight)
 
 	ElseIf page == "Female Morphs"
 
 		SetCursorFillMode(LEFT_TO_RIGHT)
-		addInputOptionSt("WeightAddFemaleMorphState", "Add Female Morph", "")
-		AddEmptyOption()
+		If !SliderCustomLock
+			addInputOptionSt("WeightAddFemaleMorphState", "Add Female Morph", "")
+			addMenuOptionSt("FemalePresetState", "Load Bodyslide Preset", None)
+		EndIf
 
-		;Female morphs span elements 0 through 31.
-		AddMorphQuads(Core.MorphStrings, Core.MorphsLow, Core.MorphsHigh, 0, 32)
+		AddMorphQuads(Core.FemaleSliderStrings, Core.FemaleSliderLows, Core.FemaleSliderHighs, 0)
 
 	ElseIf page == "Male Morphs"
 
 		SetCursorFillMode(LEFT_TO_RIGHT)
-		addInputOptionSt("WeightAddMaleMorphState", "Add Male Morph", "")
-		AddEmptyOption()
+		If !SliderCustomLock
+			addInputOptionSt("WeightAddMaleMorphState", "Add Male Morph", "")
+			addMenuOptionSt("MalePresetState", "Load Bodyslide Preset", None)
+		EndIf
 
-		; Male morphs span elements 32 through 63.
-		AddMorphQuads(Core.MorphStrings, Core.MorphsLow, Core.MorphsHigh, 32, 32)
+		AddMorphQuads(Core.MaleSliderStrings, Core.MaleSliderLows, Core.MaleSliderHighs, 1)
 
 	ElseIf page == "Creature Morphs"
 		SetCursorFillMode(LEFT_TO_RIGHT)
-		addInputOptionSt("WeightAddCreatureMorphState", "Add Creature Morph", "")
-		AddEmptyOption()
-		; Creature morphs span elements 64 through 95.
-		AddMorphQuads(Core.MorphStrings, Core.MorphsLow, Core.MorphsHigh, 64, 32)
+		If !SliderCustomLock
+			addInputOptionSt("WeightAddCreatureMorphState", "Add Creature Morph", "")
+			AddEmptyOption()
+		EndIf
+
+		AddMorphQuads(Core.CreatureSliderStrings, Core.CreatureSliderLows, Core.CreatureSliderHighs, 2)
 	EndIf
 EndEvent
 
 event OnConfigClose()
 
+	SliderCustomLock = False
 	If ValueOptions >= 0
 		UIListMenu menu = UIExtensions.GetMenu("UIListMenu") as UIListMenu
 		bool exit = false
@@ -250,26 +267,71 @@ String Function IsTextFieldFilled(String asString)
 	EndIf
 EndFunction
 
-Function AddMorphQuads(String[] morphNames, float[] multLow, float[] multHigh, int offset, int count)
-	int index = offset
-	int endpoint = offset + count
+Function AddMorphQuads(String[] morphNames, float[] multLow, float[] multHigh, int iType)
+	int iIndex = 0
+	int endpoint = morphNames.Length
 
-	while index < endpoint
-		if morphNames[index] != ""
-			int[] quad = new int[4]
-			quad[0] = index
-			quad[1] = AddInputOption("Morph", morphNames[index])
-			AddEmptyOption()
-			quad[2] = AddInputOption("Low", multLow[index])
-			quad[3] = AddInputOption("High", multHigh[index])
+	If !SliderCustomLock
+		while iIndex < endpoint
+			if morphNames[iIndex] != ""
+				int[] quad = new int[4]
+				quad[0] = iIndex
+				quad[1] = AddTextOption(morphNames[iIndex] + " L: " +StringUtil.Substring(multLow[iIndex] as String, 0, 5)+ " H: " +StringUtil.Substring(multHigh[iIndex] as String, 0, 5), None)
+				;AddEmptyOption()
+				quad[2] = iType
+				;quad[3] = AddInputOption("High", multHigh[index])
 
-			int oQuad = JArray_objectWithInts(quad)
-			JIntMap_SetObj(optionsMap, quad[1], oQuad)
-			JIntMap_SetObj(optionsMap, quad[2], oQuad)
-			JIntMap_SetObj(optionsMap, quad[3], oQuad)
-		endIf
-		index += 1
-	endWhile
+				int oQuad = JArray_objectWithInts(quad)
+				JIntMap_SetObj(optionsMap, quad[1], oQuad)
+				;JIntMap_SetObj(optionsMap, quad[2], oQuad)
+				;JIntMap_SetObj(optionsMap, quad[3], oQuad)
+			endIf
+			iIndex += 1
+		endWhile
+	Else
+		;Int oid = sliderCustomisation[0]
+		;if !AssertTrue(PREFIX, "OnOptionSelect", "JIntMap_HasKey(optionsMap, oid)", JIntMap_HasKey(optionsMap, oid))
+		;	return
+		;endIf
+	
+		;int oq = JIntMap_GetObj(optionsMap, oid)
+		;if !AssertExists(PREFIX, "OnOptionSelect", "oq", oq)
+		;	return
+		;endIf
+		
+		;int[] quad = JArray_asIntArray(oq)
+		;debug.messagebox(quad[1] + " and " +quad[0])
+		;sliderCustomisation = new Int[4]
+		;iType = sliderCustomisation[1]
+		iIndex = sliderCustomisation[0]
+
+		String[] Sliders
+		Float[] Lows
+		Float[] Highs
+
+		If iType == 0
+			Sliders = Core.FemaleSliderStrings
+			Lows = Core.FemaleSliderLows
+			Highs = Core.FemaleSliderHighs
+		ElseIf iType == 1
+			Sliders = Core.MaleSliderStrings
+			Lows = Core.MaleSliderLows
+			Highs = Core.MaleSliderHighs
+		ElseIf iType == 2
+			Sliders = Core.CreatureSliderStrings
+			Lows = Core.CreatureSliderLows
+			Highs = Core.CreatureSliderHighs
+		EndIf
+
+		sliderCustomisation[2] = AddInputOption("Slider Name: ", Sliders[iIndex])
+		sliderCustomisation[3] = AddTextOption("Delete Slider", None)
+		sliderCustomisation[4] = AddInputOption("Low Value: ", Lows[iIndex])
+		sliderCustomisation[5] = AddInputOption("High Value: ", Highs[iIndex])
+		AddEmptyOption()
+		sliderCustomisation[6] = AddTextOption("Go Back", None)
+	EndIf
+
+	;SliderCustomLock = False
 EndFunction
 
 state WeightAddFemaleMorphState
@@ -447,6 +509,94 @@ state MaleNormal2State
 	endEvent
 endState
 
+Function LoadBodyslidePresetData(String asPresetName, bool abFemale)
+
+	;Creatre preset-loading isn't presently supported as I doubt the use-case.
+
+	String[] Sliders = BodyslideReader.GetPresetSliderStrings(asPresetName)
+	Float[] Lows = BodyslideReader.GetPresetSliderLows(asPresetName)
+	Float[] Highs = BodyslideReader.GetPresetSliderHighs(asPresetName)
+
+	;Debug.MessageBox("Sliders: " +sliders.Length+ " lows: " +lows.length+ " highs: " +highs.Length)
+	Int iPos = 0
+	Int iStopper = 128
+	If abFemale
+		Core.FemaleSliderStrings = Sliders
+		Core.FemaleSliderHighs = Highs
+		Core.FemaleSliderLows = Lows
+
+		Core.FemaleSliderStrings = Utility.ResizeStringArray(Core.FemaleSliderStrings, 128)
+        Core.FemaleSliderHighs = Utility.ResizeFloatArray(Core.FemaleSliderHighs, 128)
+        Core.FemaleSliderLows = Utility.ResizeFloatArray(Core.FemaleSliderLows, 128)
+	Else
+		Core.MaleSliderStrings = Sliders
+		Core.MaleSliderHighs = Highs
+		Core.MaleSliderLows = Lows
+
+		Core.MaleSliderStrings = Utility.ResizeStringArray(Core.MaleSliderStrings, 128)
+        Core.MaleSliderHighs = Utility.ResizeFloatArray(Core.MaleSliderHighs, 128)
+        Core.MaleSliderLows = Utility.ResizeFloatArray(Core.MaleSliderLows, 128)
+	EndIf
+	
+
+EndFunction
+
+state FemalePresetState
+	event OnMenuOpenST()
+		BodyslideReader.ReloadPresets()
+		FemalePresets = BodyslideReader.GetPresetList(true)
+		SetMenuDialogOptions(FemalePresets)
+	endEvent
+
+	event OnMenuAcceptST(int index)
+		if index != -1
+			SetMenuOptionValueST(FemalePresets[index])
+			LoadBodyslidePresetData(FemalePresets[index], True)
+			ForcePageReset()
+			Debug.MessageBox("Loaded Preset: " +FemalePresets[index])
+			If Core.PlayerEnabled
+				Float fWeight = StorageUtil.GetFloatValue(PlayerRef, MODKEY)
+				Core.BodyMorphUpdate(PlayerRef, fWeight)
+			EndIf
+		endIf
+	endEvent
+
+	event OnDefaultST()
+	endEvent
+
+	event OnHighlightST()
+		SetInfoText("Loads a given Bodyslide Preset as the base for your Female Morph settings. Will overwrite any current settings when selected.")
+	endEvent
+endstate
+
+state MalePresetState
+	event OnMenuOpenST()
+		BodyslideReader.ReloadPresets()
+		MalePresets = BodyslideReader.GetPresetList(false)
+		SetMenuDialogOptions(MalePresets)
+	endEvent
+
+	event OnMenuAcceptST(int index)
+		If index != -1
+			SetMenuOptionValueST(MalePresets[index])
+			LoadBodyslidePresetData(MalePresets[index], false)
+			ForcePageReset()
+			Debug.MessageBox("Loaded Preset: " +MalePresets[index])
+			If Core.PlayerEnabled
+				Float fWeight = StorageUtil.GetFloatValue(PlayerRef, MODKEY)
+				Core.BodyMorphUpdate(PlayerRef, fWeight)
+			EndIf
+		EndIf
+	endEvent
+
+	event OnDefaultST()
+	endEvent
+
+	event OnHighlightST()
+		SetInfoText("Loads a given Bodyslide Preset as the base for your Male Morph settings. Will overwrite any current settings when selected.")
+	endEvent
+endstate
+
 state ModEnableState
 	event OnSelectST()
 		Core.ModEnabled = !Core.ModEnabled
@@ -507,7 +657,7 @@ state ArmNodeEnabledState
 		setToggleOptionValueST(Core.ArmNodeChanges)
 	endEvent
 	event OnHighlightST()
-		SetInfoText("If enabled, humans gaining weight will have their arms proportionally spread out in order to prevent clipping. The players' arms will update immediately on setting change.")
+		SetInfoText("If enabled, playable races gaining weight will have their arms proportionally spread out in order to prevent clipping. The players' arms will update immediately on setting change.")
 	endEvent
 endstate
 
@@ -522,7 +672,22 @@ state ThighNodeEnabledState
 		setToggleOptionValueST(Core.ThighNodeChanges)
 	endEvent
 	event OnHighlightST()
-		SetInfoText("If enabled, humans gaining weight will have their thighs proportionally spread out in order to prevent clipping. The players' thighs will update immediately on setting change.")
+		SetInfoText("If enabled, playable races gaining weight will have their thighs proportionally spread out in order to prevent clipping. The players' thighs will update immediately on setting change.")
+	endEvent
+endstate
+
+state TailNodeEnabledState
+	event OnSelectST()
+		Core.TailNodeChanges = !Core.TailNodeChanges
+		setToggleOptionValueST(Core.TailNodeChanges)
+		Core.TailNodeUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+	event OnDefaultST()
+		Core.TailNodeChanges = true
+		setToggleOptionValueST(Core.TailNodeChanges)
+	endEvent
+	event OnHighlightST()
+		SetInfoText("If enabled, playable races gaining weight will have their tail-bones proportionally move up in order to prevent clipping. The players' tail will update immediately on setting change.")
 	endEvent
 endstate
 
@@ -615,14 +780,16 @@ endstate
 state ResetOneState
 	event OnSelectST()
 		Core.ResetActorWeight(target)
-		Debug.MessageBox("Resetting " +Namer(target, true)+ "'s Weight on menu close.")
+		Debug.MessageBox("Resetting " +Namer(target, true)+ "'s Weight.")
+		fTargetWeight = Core.GetCurrentActorWeight(Target)
 	endEvent
 endstate
 
 state ResetAllState
 	event OnSelectST()
 		Core.ResetActorWeights()
-		Debug.MessageBox("Resetting ALL Actor Weights on menu close.")
+		Debug.MessageBox("Resetting ALL Actor Weights.")
+		fTargetWeight = Core.GetCurrentActorWeight(Target)
 	endEvent
 endstate
 
@@ -637,6 +804,13 @@ state MaximumWeightState
 	event OnSliderAcceptST(float a_value)
 		Core.MaximumWeight = a_value
 		SetSliderOptionValueST(a_value, "{2}")
+		If Core.PlayerEnabled
+			Float fWeight = StorageUtil.GetFloatValue(PlayerRef, MODKEY)
+			Core.BodyMorphUpdate(PlayerRef, fWeight)
+			Core.ArmNodeUpdate(PlayerRef, fWeight)
+			Core.ThighNodeUpdate(PlayerRef, fWeight)
+			Core.NormalMapUpdate(PlayerRef, fWeight)
+		EndIf
 	endEvent
 
 	event OnDefaultST()
@@ -659,6 +833,13 @@ state MinimumWeightState
 	event OnSliderAcceptST(float a_value)
 		Core.MinimumWeight = a_value
 		SetSliderOptionValueST(a_value, "{2}")
+		If Core.PlayerEnabled
+			Float fWeight = StorageUtil.GetFloatValue(PlayerRef, MODKEY)
+			Core.BodyMorphUpdate(PlayerRef, fWeight)
+			Core.ArmNodeUpdate(PlayerRef, fWeight)
+			Core.ThighNodeUpdate(PlayerRef, fWeight)
+			Core.NormalMapUpdate(PlayerRef, fWeight)
+		EndIf
 	endEvent
 
 	event OnDefaultST()
@@ -713,6 +894,29 @@ state ThighNodeFactorState
 
 	event OnHighlightST()
 		SetInfoText("The amount in degrees that the hip bones will be adjusted by at Maximum Weight. Higher factors may cause strange warping. The players' arms will update immediately on setting change.")
+	endEvent
+endState
+
+state TailNodeFactorState
+	Event OnSliderOpenST()
+		SetSliderDialogStartValue(Core.TailNodeFactor)
+		SetSliderDialogDefaultValue(16.0)
+		SetSliderDialogRange(0.01, 100.0)
+		SetSliderDialogInterval(0.01)
+	endEvent
+
+	event OnSliderAcceptST(float a_value)
+		Core.TailNodeFactor = a_value
+		SetSliderOptionValueST(a_value, "{2}")
+		Core.TailNodeUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnDefaultST()
+		SetSliderOptionValueST(Core.TailNodeFactor, "{2}")
+	endEvent
+
+	event OnHighlightST()
+		SetInfoText("The amount in game units that the tail bones will be moved upwards by at Maximum Weight. The players' tail will update immediately on setting change.")
 	endEvent
 endState
 
@@ -1019,80 +1223,148 @@ endState
 
 Event OnUpdate()
 	Float fOldWeight = Core.GetCurrentActorWeight(Target)
-	Core.BodyMorphUpdate(Target, fOldWeight)
-	Core.ArmNodeUpdate(Target, fOldWeight)
-	Core.ThighNodeUpdate(Target, fOldWeight)
-	Core.NormalMapUpdate(Target, fOldWeight)
+	Core.FullFeatureUpdate(Target, fOldWeight)
 EndEvent
+
+event OnOptionSelect(int oid)
+
+	;debug.MessageBox(oid)
+	If oid == sliderCustomisation[3]	; Delete Slider button
+
+		int iType = sliderCustomisation[1]
+		int iIndex = sliderCustomisation[0]
+		String sliderName
+
+		If iType == 0
+			sliderName = Core.FemaleSliderStrings[iIndex]
+		ElseIf iType == 1
+			sliderName = Core.MaleSliderStrings[iIndex]
+		ElseIf iType == 2
+			sliderName = Core.CreatureSliderStrings[iIndex]
+		EndIf
+
+		If ShowMessage("Delete this slider?", true,"Yes", "No")
+
+			Core.RemoveMorph(iIndex, iType)
+			SliderCustomLock = False
+			Debug.Messagebox("Deleting slider: " +sliderName)
+
+			ForcePageReset()
+		EndIf
+	ElseIf oid == sliderCustomisation[6] && SliderCustomLock == True ; Back button
+		SliderCustomLock = False
+		ForcePageReset()
+	Else
+	
+		if !AssertTrue(PREFIX, "OnOptionSelect", "JIntMap_HasKey(optionsMap, oid)", JIntMap_HasKey(optionsMap, oid))
+			return
+		endIf
+
+		int oq = JIntMap_GetObj(optionsMap, oid)
+		if !AssertExists(PREFIX, "OnOptionSelect", "oq", oq)
+			return
+		endIf
+
+		SliderCustomLock = True
+		int[] quad = JArray_asIntArray(oq)
+
+		int iPosition = quad[0] + 4
+		if iPosition % 2 > 0
+			iPosition = quad[0] + 3
+		endif
+		;debug.MessageBox("pos: " +iPosition)
+		SetCursorPosition(2)
+		SetCursorFillMode(LEFT_TO_RIGHT)
+
+		ForcePageReset()
+		
+		sliderCustomisation = new Int[7]
+		sliderCustomisation[0] = quad[0]	;Index
+		sliderCustomisation[1] = quad[2]	;iType
+	EndIf
+	
+endEvent
+
 
 event OnOptionInputOpen(int oid)
 
-	if !AssertTrue(PREFIX, "OnOptionInputOpen", "JIntMap_HasKey(optionsMap, oid)", JIntMap_HasKey(optionsMap, oid))
-		return
-	endIf
+	If oid == sliderCustomisation[2] || oid == sliderCustomisation[4] \
+		|| oid == sliderCustomisation[5]
 
-	String[] MorphStrings = Core.MorphStrings
-	float[] MultLow = Core.MorphsLow
-	float[] MultHigh = Core.MorphsHigh
+		int iIndex = sliderCustomisation[0]
+		int iType = sliderCustomisation[1]
 
-	; Get the quad.
-	int oq = JIntMap_GetObj(optionsMap, oid)
-	if !AssertExists(PREFIX, "OnOptionInputOpen", "oq", oq)
-		return
-	endIf
-
-	int[] quad = JArray_asIntArray(oq)
-	int index = quad[0]
-	String morph = MorphStrings[index]
-
-	if oid == quad[1]
-		SetInputDialogStartText(MorphStrings[index])
-	elseif oid == quad[2]
-		SetInputDialogStartText(MultLow[index])
-	elseif oid == quad[3]
-		SetInputDialogStartText(MultHigh[index])
-	endIf
+		if oid == sliderCustomisation[2]
+			If iType == 0
+				SetInputDialogStartText(Core.FemaleSliderStrings[iIndex])
+			ElseIf iType == 1
+				SetInputDialogStartText(Core.MaleSliderStrings[iIndex])
+			ElseIf iType == 2
+				SetInputDialogStartText(Core.CreatureSliderStrings[iIndex])
+			EndIf
+			
+		elseif oid == sliderCustomisation[4]
+			If iType == 0
+				SetInputDialogStartText(Core.FemaleSliderLows[iIndex])
+			ElseIf iType == 1
+				SetInputDialogStartText(Core.MaleSliderLows[iIndex])
+			ElseIf iType == 2
+				SetInputDialogStartText(Core.CreatureSliderLows[iIndex])
+			EndIf
+		elseif oid == sliderCustomisation[5]
+			If iType == 0
+				SetInputDialogStartText(Core.FemaleSliderHighs[iIndex])
+			ElseIf iType == 1
+				SetInputDialogStartText(Core.MaleSliderHighs[iIndex])
+			ElseIf iType == 2
+				SetInputDialogStartText(Core.CreatureSliderHighs[iIndex])
+			EndIf
+		endIf
+	EndIf
 endEvent
 
 event OnOptionInputAccept(int oid, string a_input)
-	
-	if !AssertTrue(PREFIX, "OnOptionInputAccept", "JIntMap_hasKey(optionsMap, oid)", JIntMap_hasKey(optionsMap, oid))
-		return
-	endIf
-	
-	String[] MorphStrings = Core.MorphStrings
-	float[] MultLow = Core.MorphsLow
-	float[] MultHigh = Core.MorphsHigh
-	
-	; Get the quad.
-	int oq = JIntMap_GetObj(optionsMap, oid)
-	if !AssertExists(PREFIX, "OnOptionInputAccept", "oq", oq)
-		return
-	endIf
-	
-	int[] quad = JArray_asIntArray(oq)
-	int index = quad[0]
-	String morph = MorphStrings[index]
-	
-	if oid == quad[1]
-		if a_input == ""
-			Core.RemoveMorph(index)
-			ForcePageReset()
-		else
-			MorphStrings[index] = a_input
-			SetInputOptionValue(oid, a_input)
-		endIf
-	
-	elseif oid == quad[2]
-		float val = a_input as float
-		MultLow[index] = val
-		SetInputOptionValue(oid, val)
+
+	If oid == sliderCustomisation[2] || oid == sliderCustomisation[4] \
+		|| oid == sliderCustomisation[5]
 		
-	elseif oid == quad[3]
-		float val = a_input as float
-		MultHigh[index] = val
-		SetInputOptionValue(oid, val)
-	endIf
+		int iIndex = sliderCustomisation[0]
+		int iType = sliderCustomisation[1]
+		
+		if oid == sliderCustomisation[2]
+			If iType == 0
+				Core.FemaleSliderStrings[iIndex] = a_input
+			ElseIf iType == 1
+				Core.MaleSliderStrings[iIndex] = a_input
+			ElseIf iType == 2
+				Core.CreatureSliderStrings[iIndex] = a_input
+			EndIf
+			SetInputOptionValue(oid, a_input)
+		
+		elseif oid == sliderCustomisation[4]
+			float val = a_input as float
+			If iType == 0
+				Core.FemaleSliderLows[iIndex] = val
+			ElseIf iType == 1
+				Core.MaleSliderLows[iIndex] = val
+			ElseIf iType == 2
+				Core.CreatureSliderLows[iIndex] = val
+			EndIf
+			SetInputOptionValue(oid, val)
+			
+		elseif oid == sliderCustomisation[5]
+			float val = a_input as float
+			If iType == 0
+				Core.FemaleSliderHighs[iIndex] = val
+			ElseIf iType == 1
+				Core.MaleSliderHighs[iIndex] = val
+			ElseIf iType == 2
+				Core.CreatureSliderHighs[iIndex] = val
+			EndIf
+			SetInputOptionValue(oid, val)
+
+		endIf
+	EndIf
 endEvent
 
 Function ActorWeightLoss(ObjectReference akTarget)	;A strange NiOverride workaround, as Ref Alias' are not Form inheritor.
