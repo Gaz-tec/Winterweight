@@ -594,7 +594,7 @@ Function TailNodeUpdate(Actor akTarget, Float afWeight)
 			endif
 			Float[] XYZ = New Float[3]
 			Float fModifier = (TailNodeFactor * fPercent)
-			XYZ[1] = XYZ[1] + fModifier
+			XYZ[1] = ((XYZ[1] + fModifier) / 3) * -1
 			
 			XYZ[2] = XYZ[2] + fModifier	;Up
 			NiOverride.AddNodeTransformPosition(akTarget, False, isFemale, CMETails, MODKEY, XYZ)

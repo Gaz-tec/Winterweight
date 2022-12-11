@@ -19,6 +19,7 @@ Int[] sliderCustomisation
 String[] FemalePresets
 String[] MalePresets
 Float fTargetWeight
+Int iWeightReadoutOID
 int ValueOptions = -1
 
 ;/ SKI Code so I remember how version updates go.
@@ -168,7 +169,7 @@ Event OnPageReset(string page)
 		AddTextOptionST("ResetOneState", "Reset " +Namer(Target, True)+  "'s Weight", None)
 		AddTextOptionST("ResetAllState", "Reset All Actors Weight Values", None)
 		AddSliderOptionST("SetWeightState", "Set " +Namer(Target, true)+ "'s weight", 0.0, "{2}")
-		AddTextOption(Namer(Target, true)+ "'s Weight: ", fTargetWeight)
+		iWeightReadoutOID = AddTextOption(Namer(Target, true)+ "'s Weight: ", fTargetWeight)
 
 	ElseIf page == "Female Morphs"
 
@@ -782,6 +783,7 @@ state ResetOneState
 		Core.ResetActorWeight(target)
 		Debug.MessageBox("Resetting " +Namer(target, true)+ "'s Weight.")
 		fTargetWeight = Core.GetCurrentActorWeight(Target)
+		SetTextOptionValue(iWeightReadoutOID, fTargetWeight)
 	endEvent
 endstate
 
@@ -790,6 +792,7 @@ state ResetAllState
 		Core.ResetActorWeights()
 		Debug.MessageBox("Resetting ALL Actor Weights.")
 		fTargetWeight = Core.GetCurrentActorWeight(Target)
+		SetTextOptionValue(iWeightReadoutOID, fTargetWeight)
 	endEvent
 endstate
 
@@ -806,10 +809,7 @@ state MaximumWeightState
 		SetSliderOptionValueST(a_value, "{2}")
 		If Core.PlayerEnabled
 			Float fWeight = StorageUtil.GetFloatValue(PlayerRef, MODKEY)
-			Core.BodyMorphUpdate(PlayerRef, fWeight)
-			Core.ArmNodeUpdate(PlayerRef, fWeight)
-			Core.ThighNodeUpdate(PlayerRef, fWeight)
-			Core.NormalMapUpdate(PlayerRef, fWeight)
+			Core.FullFeatureUpdate(PlayerRef, fWeight)
 		EndIf
 	endEvent
 
@@ -835,10 +835,7 @@ state MinimumWeightState
 		SetSliderOptionValueST(a_value, "{2}")
 		If Core.PlayerEnabled
 			Float fWeight = StorageUtil.GetFloatValue(PlayerRef, MODKEY)
-			Core.BodyMorphUpdate(PlayerRef, fWeight)
-			Core.ArmNodeUpdate(PlayerRef, fWeight)
-			Core.ThighNodeUpdate(PlayerRef, fWeight)
-			Core.NormalMapUpdate(PlayerRef, fWeight)
+			Core.FullFeatureUpdate(PlayerRef, fWeight)
 		EndIf
 	endEvent
 
@@ -1179,10 +1176,7 @@ state PreviewState
 
 	event OnSliderAcceptST(float a_value)
 		SetSliderOptionValueST(a_value, "{2}")
-		Core.BodyMorphUpdate(Target, a_value)
-		Core.ArmNodeUpdate(Target, a_value)
-		Core.ThighNodeUpdate(Target, a_value)
-		Core.NormalMapUpdate(Target, a_value)
+		Core.FullFeatureUpdate(Target, a_value)
 		RegisterForSingleUpdate(10.0)
 	endEvent
 
@@ -1206,10 +1200,9 @@ state SetWeightState
 	event OnSliderAcceptST(float a_value)
 		SetSliderOptionValueST(a_value, "{2}")
 		Float fWeight = StorageUtil.SetFloatValue(Target, MODKEY, a_value)
-		Core.BodyMorphUpdate(Target, fWeight)
-		Core.ArmNodeUpdate(Target, fWeight)
-		Core.ThighNodeUpdate(Target, fWeight)
-		Core.NormalMapUpdate(Target, fWeight)
+		Core.FullFeatureUpdate(Target, fWeight)
+		fTargetWeight = Core.GetCurrentActorWeight(Target)
+		SetTextOptionValue(iWeightReadoutOID, fTargetWeight)
 	endEvent
 
 	event OnDefaultST()
