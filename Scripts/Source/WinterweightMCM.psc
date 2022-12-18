@@ -113,7 +113,7 @@ Event OnPageReset(string page)
 		AddSliderOptionST("PotionGainState", "Potion Gain", Core.PotionBaseGain, "{3} * Item Weight")
 		AddSliderOptionST("FoodGainState", "Food Gain", Core.FoodBaseGain, "{3} * Item Weight")
 		If Core.RefactorManager
-			AddSliderOptionST("VoreGainState", "Vore Gain", Core.VoreBaseGain, "{3} / Stage")
+			AddSliderOptionST("VoreGainState", "Vore Gain", Core.VoreBaseGain, "{3} / Same Sized Prey")
 		Else
 			AddEmptyOption()
 		EndIf
@@ -145,19 +145,48 @@ Event OnPageReset(string page)
 
 		AddInputOptionST("FemaleNormal0State", "Base Female Normal", IsTextFieldFilled(Core.FemaleNormals[0]))
 		AddEmptyOption()
+		AddInputOptionST("FemaleArgonianNormal0State", "Base Argonian Female Normal", IsTextFieldFilled(Core.FemaleArgonianNormals[0]))
+		AddEmptyOption()
+		AddInputOptionST("FemaleKhajiitNormal0State", "Base Khajiit Female Normal", IsTextFieldFilled(Core.FemaleKhajiitNormals[0]))
+		AddEmptyOption()
+
 		AddInputOptionST("FemaleNormal1State", "First Female Normal", IsTextFieldFilled(Core.FemaleNormals[1]))
 		AddSliderOptionST("FemaleNormal1ThresholdState", "First Normal Threshold", Core.FemaleNormalBreakpoints[1], "{2} Weight")
+		AddInputOptionST("FemaleArgonianNormal1State", "First Argonian Female Normal", IsTextFieldFilled(Core.FemaleArgonianNormals[1]))
+		AddEmptyOption()
+		AddInputOptionST("FemaleKhajiitNormal1State", "First Khajiit Female Normal", IsTextFieldFilled(Core.FemaleKhajiitNormals[1]))
+		AddEmptyOption()
+
 		AddInputOptionST("FemaleNormal2State", "Second Female Normal", IsTextFieldFilled(Core.FemaleNormals[2]))
 		AddSliderOptionST("FemaleNormal2ThresholdState", "Second Normal Threshold", Core.FemaleNormalBreakpoints[2], "{2} Weight")
+		AddInputOptionST("FemaleArgonianNormal2State", "Second Argonian Female Normal", IsTextFieldFilled(Core.FemaleArgonianNormals[2]))
+		AddEmptyOption()
+		AddInputOptionST("FemaleKhajiitNormal2State", "Second Khajiit Female Normal", IsTextFieldFilled(Core.FemaleKhajiitNormals[2]))
+		AddEmptyOption()
 
 		AddToggleOptionST("MaleNormalsEnabledState", "Male Normal Changes", Core.MaleNormalChanges)
 		AddEmptyOption()
+
 		AddInputOptionST("MaleNormal0State", "Base Male Normal", IsTextFieldFilled(Core.MaleNormals[0]))
 		AddEmptyOption()
+		AddInputOptionST("MaleArgonianNormal0State", "Base Argonian Male Normal", IsTextFieldFilled(Core.MaleArgonianNormals[0]))
+		AddEmptyOption()
+		AddInputOptionST("MaleKhajiitNormal0State", "Base Khajiit Male Normal", IsTextFieldFilled(Core.MaleKhajiitNormals[0]))
+		AddEmptyOption()
+
 		AddInputOptionST("MaleNormal1State", "First Male Normal", IsTextFieldFilled(Core.MaleNormals[1]))
 		AddSliderOptionST("MaleNormal1ThresholdState", "First Normal Threshold", Core.MaleNormalBreakpoints[1], "{2} Weight")
+		AddInputOptionST("MaleArgonianNormal1State", "First Argonian Male Normal", IsTextFieldFilled(Core.MaleArgonianNormals[1]))
+		AddEmptyOption()
+		AddInputOptionST("MaleKhajiitNormal1State", "First Khajiit Male Normal", IsTextFieldFilled(Core.MaleKhajiitNormals[1]))
+		AddEmptyOption()
+
 		AddInputOptionST("MaleNormal2State", "Second Male Normal", IsTextFieldFilled(Core.MaleNormals[2]))
 		AddSliderOptionST("MaleNormal2ThresholdState", "Second Normal Threshold", Core.MaleNormalBreakpoints[2], "{2} Weight")
+		AddInputOptionST("MaleArgonianNormal2State", "Second Argonian Male Normal", IsTextFieldFilled(Core.MaleArgonianNormals[2]))
+		AddEmptyOption()
+		AddInputOptionST("MaleKhajiitNormal2State", "Second Khajiit Male Normal", IsTextFieldFilled(Core.MaleKhajiitNormals[2]))
+		AddEmptyOption()
 
 		AddHeaderOption("Setting Persistence")
 		AddEmptyOption()
@@ -275,7 +304,7 @@ Function AddMorphQuads(String[] morphNames, float[] multLow, float[] multHigh, i
 	If !SliderCustomLock
 		while iIndex < endpoint
 			if morphNames[iIndex] != ""
-				int[] quad = new int[4]
+				int[] quad = new int[3]
 				quad[0] = iIndex
 				quad[1] = AddTextOption(morphNames[iIndex] + " L: " +StringUtil.Substring(multLow[iIndex] as String, 0, 5)+ " H: " +StringUtil.Substring(multHigh[iIndex] as String, 0, 5), None)
 				;AddEmptyOption()
@@ -444,6 +473,138 @@ state FemaleNormal2State
 	endEvent
 endState
 
+state FemaleArgonianNormal0State
+	event OnInputOpenST()
+		SetInputDialogStartText(Core.FemaleArgonianNormals[0])
+	endEvent
+
+	event OnInputAcceptST(string a_input)
+		Core.FemaleArgonianNormals[0] = a_input
+		SetInputOptionValueST(Core.FemaleArgonianNormals[0])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnDefaultST()
+		Core.FemaleArgonianNormals[0] = "Actors\\Character\\argonianfemale\\argonianfemalebody_msn.dds"
+		SetInputOptionValueST(Core.FemaleArgonianNormals[0])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnHighlightST()
+		SetInfoText("The default Normal Map that will be applied to Argonian Females when they drop below the thresholds for any higher Normals.")
+	endEvent
+endState
+
+state FemaleArgonianNormal1State
+	event OnInputOpenST()
+		SetInputDialogStartText(Core.FemaleArgonianNormals[1])
+	endEvent
+
+	event OnInputAcceptST(string a_input)
+		Core.FemaleArgonianNormals[1] = a_input
+		SetInputOptionValueST(Core.FemaleArgonianNormals[1])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnDefaultST()
+		Core.FemaleArgonianNormals[1] = ""
+		SetInputOptionValueST(Core.FemaleArgonianNormals[1])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnHighlightST()
+		SetInfoText("The first Normal Map that will be applied to Argonian Females when they rise above the associated threshold.")
+	endEvent
+endState
+
+state FemaleArgonianNormal2State
+	event OnInputOpenST()
+		SetInputDialogStartText(Core.FemaleArgonianNormals[2])
+	endEvent
+
+	event OnInputAcceptST(string a_input)
+		Core.FemaleArgonianNormals[2] = a_input
+		SetInputOptionValueST(Core.FemaleArgonianNormals[2])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnDefaultST()
+		Core.FemaleArgonianNormals[2] = ""
+		SetInputOptionValueST(Core.FemaleArgonianNormals[2])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnHighlightST()
+		SetInfoText("The second Normal Map that will be applied to Argonian Females when they rise above the associated threshold.")
+	endEvent
+endState
+
+state FemaleKhajiitNormal0State
+	event OnInputOpenST()
+		SetInputDialogStartText(Core.FemaleKhajiitNormals[0])
+	endEvent
+
+	event OnInputAcceptST(string a_input)
+		Core.FemaleKhajiitNormals[0] = a_input
+		SetInputOptionValueST(Core.FemaleKhajiitNormals[0])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnDefaultST()
+		Core.FemaleKhajiitNormals[0] = "Actors\\Character\\khajiitfemale\\femalebody_msn.dds"
+		SetInputOptionValueST(Core.FemaleKhajiitNormals[0])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnHighlightST()
+		SetInfoText("The default Normal Map that will be applied to Khajiit Females when they drop below the thresholds for any higher Normals.")
+	endEvent
+endState
+
+state FemaleKhajiitNormal1State
+	event OnInputOpenST()
+		SetInputDialogStartText(Core.FemaleKhajiitNormals[1])
+	endEvent
+
+	event OnInputAcceptST(string a_input)
+		Core.FemaleKhajiitNormals[1] = a_input
+		SetInputOptionValueST(Core.FemaleKhajiitNormals[1])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnDefaultST()
+		Core.FemaleKhajiitNormals[1] = ""
+		SetInputOptionValueST(Core.FemaleKhajiitNormals[1])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnHighlightST()
+		SetInfoText("The first Normal Map that will be applied to Khajiit Females when they rise above the associated threshold.")
+	endEvent
+endState
+
+state FemaleKhajiitNormal2State
+	event OnInputOpenST()
+		SetInputDialogStartText(Core.FemaleKhajiitNormals[2])
+	endEvent
+
+	event OnInputAcceptST(string a_input)
+		Core.FemaleKhajiitNormals[2] = a_input
+		SetInputOptionValueST(Core.FemaleKhajiitNormals[2])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnDefaultST()
+		Core.FemaleKhajiitNormals[2] = ""
+		SetInputOptionValueST(Core.FemaleKhajiitNormals[2])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnHighlightST()
+		SetInfoText("The second Normal Map that will be applied to Khajiit Females when they rise above the associated threshold.")
+	endEvent
+endState
+
 state MaleNormal0State
 	event OnInputOpenST()
 		SetInputDialogStartText(Core.MaleNormals[0])
@@ -507,6 +668,138 @@ state MaleNormal2State
 
 	event OnHighlightST()
 		SetInfoText("The second Normal Map that will be applied to Males when they rise above the associated threshold.")
+	endEvent
+endState
+
+state MaleArgonianNormal0State
+	event OnInputOpenST()
+		SetInputDialogStartText(Core.MaleArgonianNormals[0])
+	endEvent
+
+	event OnInputAcceptST(string a_input)
+		Core.MaleArgonianNormals[0] = a_input
+		SetInputOptionValueST(Core.MaleArgonianNormals[0])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnDefaultST()
+		Core.MaleArgonianNormals[0] = "Actors\\Character\\argonianmale\\argonianmalebody_msn.dds"
+		SetInputOptionValueST(Core.MaleArgonianNormals[0])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnHighlightST()
+		SetInfoText("The default Normal Map that will be applied to Argonian Males when they drop below the thresholds for any higher Normals.")
+	endEvent
+endState
+
+state MaleArgonianNormal1State
+	event OnInputOpenST()
+		SetInputDialogStartText(Core.MaleArgonianNormals[1])
+	endEvent
+
+	event OnInputAcceptST(string a_input)
+		Core.MaleArgonianNormals[1] = a_input
+		SetInputOptionValueST(Core.MaleArgonianNormals[1])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnDefaultST()
+		Core.MaleArgonianNormals[1] = ""
+		SetInputOptionValueST(Core.MaleArgonianNormals[1])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnHighlightST()
+		SetInfoText("The first Normal Map that will be applied to Argonian Males when they rise above the associated threshold.")
+	endEvent
+endState
+
+state MaleArgonianNormal2State
+	event OnInputOpenST()
+		SetInputDialogStartText(Core.MaleArgonianNormals[2])
+	endEvent
+
+	event OnInputAcceptST(string a_input)
+		Core.MaleArgonianNormals[2] = a_input
+		SetInputOptionValueST(Core.MaleArgonianNormals[2])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnDefaultST()
+		Core.MaleArgonianNormals[2] = ""
+		SetInputOptionValueST(Core.MaleArgonianNormals[2])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnHighlightST()
+		SetInfoText("The second Normal Map that will be applied to Argonian Males when they rise above the associated threshold.")
+	endEvent
+endState
+
+state MaleKhajiitNormal0State
+	event OnInputOpenST()
+		SetInputDialogStartText(Core.MaleKhajiitNormals[0])
+	endEvent
+
+	event OnInputAcceptST(string a_input)
+		Core.MaleKhajiitNormals[0] = a_input
+		SetInputOptionValueST(Core.MaleKhajiitNormals[0])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnDefaultST()
+		Core.MaleKhajiitNormals[0] = "Actors\\Character\\khajiitmale\\malebody_msn.dds"
+		SetInputOptionValueST(Core.MaleKhajiitNormals[0])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnHighlightST()
+		SetInfoText("The default Normal Map that will be applied to Khajiit Males when they drop below the thresholds for any higher Normals.")
+	endEvent
+endState
+
+state MaleKhajiitNormal1State
+	event OnInputOpenST()
+		SetInputDialogStartText(Core.MaleKhajiitNormals[1])
+	endEvent
+
+	event OnInputAcceptST(string a_input)
+		Core.MaleKhajiitNormals[1] = a_input
+		SetInputOptionValueST(Core.MaleKhajiitNormals[1])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnDefaultST()
+		Core.MaleKhajiitNormals[1] = ""
+		SetInputOptionValueST(Core.MaleKhajiitNormals[1])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnHighlightST()
+		SetInfoText("The first Normal Map that will be applied to Khajiit Males when they rise above the associated threshold.")
+	endEvent
+endState
+
+state MaleKhajiitNormal2State
+	event OnInputOpenST()
+		SetInputDialogStartText(Core.MaleKhajiitNormals[2])
+	endEvent
+
+	event OnInputAcceptST(string a_input)
+		Core.MaleKhajiitNormals[2] = a_input
+		SetInputOptionValueST(Core.MaleKhajiitNormals[2])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnDefaultST()
+		Core.MaleKhajiitNormals[2] = ""
+		SetInputOptionValueST(Core.MaleKhajiitNormals[2])
+		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+	endEvent
+
+	event OnHighlightST()
+		SetInfoText("The second Normal Map that will be applied to Khajiit Males when they rise above the associated threshold.")
 	endEvent
 endState
 
@@ -1147,22 +1440,22 @@ endState
 state VoreGainState
 	Event OnSliderOpenST()
 		SetSliderDialogStartValue(Core.VoreBaseGain)
-		SetSliderDialogDefaultValue(0.03)
-		SetSliderDialogRange(0.001, 5.0)
+		SetSliderDialogDefaultValue(0.9)
+		SetSliderDialogRange(0.001, Core.MaximumWeight)
 		SetSliderDialogInterval(0.001)
 	endEvent
 
 	event OnSliderAcceptST(float a_value)
 		Core.VoreBaseGain = a_value
-		SetSliderOptionValueST(a_value, "{3} / Stage")
+		SetSliderOptionValueST(a_value, "{3} / Same Sized Prey")
 	endEvent
 
 	event OnDefaultST()
-		SetSliderOptionValueST(Core.VoreBaseGain, "{3} / Stage")
+		SetSliderOptionValueST(Core.VoreBaseGain, "{3}")
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("How much weight you gain per step of digesting prey. This can occur many times, depending on how large the prey is.")
+		SetInfoText("How much weight you gain for fully digesting a Prey of the same size.")
 	endEvent
 endState
 
@@ -1193,14 +1486,14 @@ state SetWeightState
 	Event OnSliderOpenST()
 		SetSliderDialogStartValue(0.0)
 		SetSliderDialogDefaultValue(0.0)
-		SetSliderDialogRange(-4.0, 20.0)
+		SetSliderDialogRange(Core.MinimumWeight, Core.MaximumWeight)
 		SetSliderDialogInterval(0.01)
 	endEvent
 
 	event OnSliderAcceptST(float a_value)
 		SetSliderOptionValueST(a_value, "{2}")
 		Float fWeight = StorageUtil.SetFloatValue(Target, MODKEY, a_value)
-		Core.FullFeatureUpdate(Target, fWeight)
+		Core.FullFeatureUpdate(Target, a_value)
 		fTargetWeight = Core.GetCurrentActorWeight(Target)
 		SetTextOptionValue(iWeightReadoutOID, fTargetWeight)
 	endEvent
@@ -1222,7 +1515,7 @@ EndEvent
 event OnOptionSelect(int oid)
 
 	;debug.MessageBox(oid)
-	If oid == sliderCustomisation[3]	; Delete Slider button
+	If oid == sliderCustomisation[3]	;Delete Slider button
 
 		int iType = sliderCustomisation[1]
 		int iIndex = sliderCustomisation[0]
@@ -1244,7 +1537,7 @@ event OnOptionSelect(int oid)
 
 			ForcePageReset()
 		EndIf
-	ElseIf oid == sliderCustomisation[6] && SliderCustomLock == True ; Back button
+	ElseIf oid == sliderCustomisation[6] && SliderCustomLock == True ;Back button
 		SliderCustomLock = False
 		ForcePageReset()
 	Else

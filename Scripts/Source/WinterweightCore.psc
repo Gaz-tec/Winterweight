@@ -12,6 +12,7 @@ Actor Property PlayerRef Auto
 Armor Property HandsArmor Auto
 Armor Property TailArmor Auto
 WinterweightMCM Property WinterMCM Auto
+
 String[] Property FemaleSliderStrings auto
 Float[] Property FemaleSliderHighs auto
 Float[] Property FemaleSliderLows auto
@@ -31,12 +32,12 @@ Form[] Property HighValueFood Auto
 Form[] Property NoValueFood Auto
 Keyword Property ActorTypeCreature Auto
 
-Bool Property ModEnabled = True Auto
+Bool Property ModEnabled = False Auto
 Bool Property PlayerEnabled = True Auto Hidden
 Bool Property NPCsEnabled = True Auto Hidden
 Bool Property ArmNodeChanges = True Auto Hidden
 Bool Property ThighNodeChanges = True Auto Hidden
-Bool Property TailNodeChanges = True Auto Hidden
+Bool Property TailNodeChanges = False Auto Hidden
 Bool Property FemaleNormalChanges = True Auto Hidden
 Bool Property MaleNormalChanges = True Auto Hidden
 Bool Property WeightLossEnabled = True Auto Hidden
@@ -53,14 +54,18 @@ Float Property TailNodeFactor = 16.0 Auto Hidden
 Float Property IngredientBaseGain = 0.04 Auto Hidden
 Float Property PotionBaseGain = 0.02 Auto Hidden
 Float Property FoodBaseGain = 0.10 Auto Hidden
-Float Property VoreBaseGain = 0.03 Auto Hidden
+Float Property VoreBaseGain = 0.9 Auto Hidden
 Float Property HighValueMultiplier = 2.0 Auto Hidden
-Quest Property RefactorManager = None Auto Hidden
+Quest Property RefactorManager = None Auto Hidden	
 
 Actor[] Property Gainers Auto
 
 String[] Property FemaleNormals Auto Hidden
+String[] Property FemaleArgonianNormals Auto Hidden
+String[] Property FemaleKhajiitNormals Auto Hidden
 String[] Property MaleNormals Auto Hidden
+String[] Property MaleArgonianNormals Auto Hidden
+String[] Property MaleKhajiitNormals Auto Hidden
 String Property SettingsFileName = "data\\skse\\plugins\\winterweight\\settings.json" autoreadonly Hidden
 
 String MODKEY = "Winterweight.esp"
@@ -79,14 +84,24 @@ Int Ticks = 0	;Holding variable for Ticks since last processed while we're doing
 Event OnInit()
 	EventRegistration()
 	FemaleNormals = New String[3]
+	FemaleArgonianNormals = New String[3]
+	FemaleKhajiitNormals = New String[3]
 	FemaleNormals[0] = "Actors\\Character\\Female\\FemaleBody_1_msn.dds"
+	FemaleArgonianNormals[0] = "Actors\\Character\\argonianfemale\\argonianfemalebody_msn.dds"
+	FemaleKhajiitNormals[0] = "Actors\\Character\\khajiitfemale\\femalebody_msn.dds"
 	FemaleNormals[1] = "Actors\\Character\\Winterweight\\Female\\FemaleBody_chubby1_msn.dds"
+	;FemaleArgonianNormals[1] = "Actors\\Character\\\argonianfemale\\argonianfemalebody_msn.dds"
+	;FemaleKhajiitNormals[1] = "Actors\\Character\\khajiitfemale\\femalebody_msn.dds"
 	FemaleNormalBreakpoints = New Float[3]
 	FemaleNormalBreakpoints[1] = 1.0
 	FemaleNormalBreakpoints[2] = 1.5
 
 	MaleNormals = New String[3]
+	MaleArgonianNormals = New String[3]
+	MaleKhajiitNormals = New String[3]
 	MaleNormals[0] = "Actors\\Character\\Male\\MaleBody_1_msn.dds"
+	MaleArgonianNormals[0] = "Actors\\Character\\argonianmale\\argonianmalebody_msn.dds"
+	MaleKhajiitNormals[0] = "Actors\\Character\\khajiitmale\\malebody_msn.dds"
 	MaleNormalBreakpoints = New Float[3]
 	MaleNormalBreakpoints[1] = 1.0
 	MaleNormalBreakpoints[2] = 1.5
@@ -123,12 +138,49 @@ Event OnPlayerLoadGame()
 EndEvent
 
 Function CheckRefactor()
-	RefactorManager = Quest.GetQuest("DevourmentManager")
+	RefactorManager = Quest.GetQuest("DevourmentManager") 
 	If RefactorManager != None
 		RegisterForModEvent("Devourment_OnDeadDigestion", "DeadDigest")
-        RegisterForModEvent("Devourment_onConsumeItem", "ItemConsume")
+        RegisterForModEvent("Devourment_onConsumeItem", "RefactorItemConsume")
+	Else
+		UnregisterForModEvent("Devourment_OnDeadDigestion")
+		UnregisterForModEvent("Devourment_onConsumeItem")
 	EndIf
 EndFunction
+
+Event DeadDigest(Form f1, Form f2, float remaining)
+	;Prevents gaining weight from prey that are reformed or fully digested.
+	if remaining >= 100.0 || remaining < 0.0
+		return
+	endIf
+
+    Actor pred = f1 as Actor
+    Actor prey = f2 as Actor
+    
+	If !pred && !prey
+        return
+    endIf
+
+	Float fRemaining = StorageUtil.GetFloatValue(prey, PREFIX + "ProcessedLast", 100.0)
+	StorageUtil.SetFloatValue(prey, PREFIX + "ProcessedLast", remaining)
+
+	Float fDelta = -remaining + fRemaining
+
+	If fDelta != 0.0
+
+		;We want the Vore Weight Ratio so we know relatively "how big a deal" the preys size is to the preds.
+		;A huge pred eating a small prey should gain little weight and vice versa.
+		DevourmentManager Manager = RefactorManager as DevourmentManager
+		Float fRatio = Manager.GetVoreWeightRatio(pred, prey)
+
+		ConsoleUtil.PrintMessage("DeadDigest worth: ("+VoreBaseGain / 100+") / ("+fRatio+ "+" +1.0+")) *" +fDelta+ ")")
+
+		;This will fire every tick of digestion so set it low and gradual.
+		;It would be much less computationally heavy to just wait until Digestion is over
+		;and *then* do this, but people want fidelity, to see the WG in action as they digest things.
+		ChangeActorWeight(pred, ((VoreBaseGain / 100) / (fRatio + 1.0)) * fDelta)
+	EndIf
+EndEvent
 
 Function EventRegistration()
 	RunPatchups()
@@ -208,8 +260,17 @@ Event SexlabAnimationEnd(int tid, bool HasPlayer)
 EndEvent
 /;
 
+Event RefactorItemConsume(Form consumer, Form itemBase, int count)
+{Same parameters as regular ItemConsume but checks if Actor is Player, as by default WinterWeight looks for Player Equip Events and would receive duplicate.}
+
+	If (Consumer as Actor) != PlayerRef
+		ItemConsume(consumer, itemBase, count)
+	EndIf
+
+EndEvent
+
 Event ItemConsume(Form consumer, Form itemBase, int count)
-{ Event that fires when Actors consume something via Feeding. Also called for Player Equip events. }
+{Event that fires when Actors consume something via Feeding. Also called for Player Equip events.}
 
 	If ModEnabled
 		If consumer == None
@@ -242,9 +303,8 @@ Event ItemConsume(Form consumer, Form itemBase, int count)
 		endIf
 		
 		If FoodBaseGain > 0.0 && itemBase.HasKeywordString("VendorItemFood")
-			
 			If HighValueFood.Find(itemBase) >= 0
-				ConsoleUtil.PrintMessage("Got high value food equip event. " +Namer(itemBase))
+				ConsoleUtil.PrintMessage("Got high value food equip event worth: " +((FoodBaseGain * baseWeight) * HighValueMultiplier)+ " " +Namer(itemBase))
 				ChangeActorWeight(gainer, (FoodBaseGain * baseWeight) * HighValueMultiplier)
 			else
 				ConsoleUtil.PrintMessage("Got food equip event worth: " +(FoodBaseGain * baseWeight)+ " " +Namer(itemBase))
@@ -253,12 +313,12 @@ Event ItemConsume(Form consumer, Form itemBase, int count)
 			;Manager.RegisterFakeDigestion(gainer, baseWeight * 2.0)
 
 		ElseIf PotionBaseGain > 0.0 && itemBase.HasKeywordString("VendorItemPotion")
-			ConsoleUtil.PrintMessage("Got potion equip event. " +itemBase)
+			ConsoleUtil.PrintMessage("Got potion equip event worth: " +PotionBaseGain+ " " +Namer(itemBase))
 			ChangeActorWeight(gainer, PotionBaseGain)
 			;Manager.RegisterFakeDigestion(gainer, baseWeight)
 			
 		ElseIf IngredientBaseGain > 0.0 && itemBase as Ingredient
-			ConsoleUtil.PrintMessage("Got ingredient equip event. " +itemBase)
+			ConsoleUtil.PrintMessage("Got ingredient equip event worth: " +(IngredientBaseGain * baseWeight)+ " " +Namer(itemBase))
 			ChangeActorWeight(gainer, IngredientBaseGain * baseWeight)
 			;Manager.RegisterFakeDigestion(gainer, baseWeight)
 		EndIf
@@ -309,15 +369,14 @@ Function ResetActorWeight(Actor target)
 		NIOverride.UpdateNodeTransform(target, false, isFemale, rootNode)
 		/;
 
-		if NiOverride.HasBodyMorphKey(target, MODKEY)
-			NiOverride.ClearBodyMorphKeys(target, MODKEY)
-			NiOverride.ClearBodyMorphKeys(target, MODKEY)	;Call twice, since sometimes this one seems to fail on first call.
-			NiOverride.UpdateModelWeight(target)
-		endIf
+		FullFeatureUpdate(target, 0.0)
+
+		NiOverride.ClearBodyMorphKeys(target, MODKEY)
+		NiOverride.ClearBodyMorphKeys(target, MODKEY)	;Call twice, since sometimes this one seems to fail on first call.
+		NiOverride.UpdateModelWeight(target)
 
 		StorageUtil.UnSetFloatValue(target, MODKEY)
 
-		FullFeatureUpdate(target, 0.0)
 	endIf
 EndFunction
 
@@ -329,20 +388,12 @@ float Function GetCurrentActorWeight(Actor target)
 	return StorageUtil.GetFloatValue(target, MODKEY, 0.0)
 EndFunction
 
-float Function GetCurrentActorWeightPercent(Actor target)
-	;if isValidConsumer(target)
-		return 0.3333 + 2.0*(GetCurrentActorWeight(target) - MinimumWeight) / (MaximumWeight - MinimumWeight)
-	;else
-	;	return 1.0
-	;endIf
-EndFunction
-
 bool Function IsFemale(Actor target)
 	return target.getLeveledActorBase().getSex()
 EndFunction
 
 Bool Function ChangeActorWeight(Actor target, float afChange, float afSplitThreshold = 0.025)
-{ All-purpose function for losing and gaining Weight. }
+{All-purpose function for losing and gaining Weight.}
 
 	If !ModEnabled || target == None
 		Return False
@@ -377,6 +428,7 @@ Bool Function ChangeActorWeight(Actor target, float afChange, float afSplitThres
 	EndIf
 
 	Return False
+
 EndFunction
 
 Function FullActorUpdate()
@@ -405,13 +457,14 @@ Function FullActorUpdate()
 EndFunction
 
 Function FullFeatureUpdate(Actor akTarget, Float afWeight)
-{ Convenience function to call all visual features on the Actor to update. }
+{Convenience function to call all visual features on the Actor to update.}
 
 	BodyMorphUpdate(akTarget, afWeight)
 	ArmNodeUpdate(akTarget, afWeight)
 	ThighNodeUpdate(akTarget, afWeight)
 	TailNodeUpdate(akTarget, afWeight)
 	NormalMapUpdate(akTarget, afWeight)
+
 EndFunction
 
 Function BodyMorphUpdate(Actor akTarget, Float afWeight)
@@ -587,14 +640,15 @@ Function TailNodeUpdate(Actor akTarget, Float afWeight)
 
 	If akTarget.HasKeywordString("ActorTypeNPC")
 		bool isFemale = IsFemale(akTarget)
-		If TailNodeChanges
-			Float fPercent = afWeight / MaximumWeight
+		Float fPercent = afWeight / MaximumWeight
 			if fpercent < 0.0
 				fpercent = 0.0
 			endif
+		If TailNodeChanges
+			
 			Float[] XYZ = New Float[3]
 			Float fModifier = (TailNodeFactor * fPercent)
-			XYZ[1] = ((XYZ[1] + fModifier) / 3) * -1
+			;XYZ[1] = ((XYZ[1] + fModifier) / 4) * -1	;Out
 			
 			XYZ[2] = XYZ[2] + fModifier	;Up
 			NiOverride.AddNodeTransformPosition(akTarget, False, isFemale, CMETails, MODKEY, XYZ)
@@ -949,8 +1003,23 @@ Bool Function LoadSettings()
 		return false
 	endIf
 
+	ModEnabled =			JMap_GetInt(data, "ModEnabled", ModEnabled as int) as bool
 	PlayerEnabled =			JMap_GetInt(data, "PlayerEnabled", PlayerEnabled as int) as bool
 	NPCsEnabled =			JMap_GetInt(data, "NPCsEnabled", NPCsEnabled as int) as bool
+	ArmNodeChanges = 		JMap_GetInt(data, "ArmNodeChanges", ArmNodeChanges as int) as bool
+	ThighNodeChanges = 		JMap_GetInt(data, "ThighNodeChanges", ThighNodeChanges as int) as bool
+	TailNodeChanges = 		JMap_GetInt(data, "TailNodeChanges", TailNodeChanges as int) as bool
+	FemaleNormalChanges = 		JMap_GetInt(data, "FemaleNormalChanges", FemaleNormalChanges as int) as bool
+	MaleNormalChanges = 		JMap_GetInt(data, "MaleNormalChanges", MaleNormalChanges as int) as bool
+	FemaleNormalBreakpoints = JArray_asFloatArray(JMap_getObj(data, "FemaleNormalBreakpoints", JArray_ObjectWithFloats(FemaleNormalBreakpoints)))
+	MaleNormalBreakpoints = JArray_asFloatArray(JMap_getObj(data, "MaleNormalBreakpoints", JArray_ObjectWithFloats(MaleNormalBreakpoints)))
+	FemaleNormals = JArray_asStringArray(JMap_getObj(data, "FemaleNormals", JArray_ObjectWithStrings(FemaleNormals)))
+	MaleNormals = JArray_asStringArray(JMap_getObj(data, "MaleNormals", JArray_ObjectWithStrings(MaleNormals)))
+	ArmNodeFactor =			JMap_GetFlt(data, "ArmNodeFactor", ArmNodeFactor)
+	ThighNodeFactor =			JMap_GetFlt(data, "ThighNodeFactor", ThighNodeFactor)
+	TailNodeFactor =			JMap_GetFlt(data, "TailNodeFactor", TailNodeFactor)
+	DropFeeding.SetValue(JMap_GetFlt(data, "DropFeeding", DropFeeding.GetValue()))
+	WeightLossEnabled =			JMap_GetInt(data, "WeightLossEnabled", WeightLossEnabled as int) as bool
 	WeightLoss =			JMap_GetFlt(data, "WeightLoss", WeightLoss)
 	WeightRate =			JMap_GetFlt(data, "WeightRate", WeightRate)
 	MaximumWeight =			JMap_GetFlt(data, "MaximumWeight", MaximumWeight)
@@ -958,6 +1027,7 @@ Bool Function LoadSettings()
 	IngredientBaseGain =	JMap_GetFlt(data, "IngredientBaseGain", IngredientBaseGain)
 	PotionBaseGain =		JMap_GetFlt(data, "PotionBaseGain", PotionBaseGain)
 	FoodBaseGain =			JMap_GetFlt(data, "FoodBaseGain", FoodBaseGain)
+	VoreBaseGain =			JMap_GetFlt(data, "VoreBaseGain", VoreBaseGain)
 	HighValueMultiplier = 	JMap_GetFlt(data, "HighValueMultiplier", HighValueMultiplier)
 
 	FemaleSliderStrings = JArray_asStringArray(JMap_getObj(data, "FemaleSliderStrings", JArray_ObjectWithStrings(FemaleSliderStrings)))
@@ -997,8 +1067,24 @@ EndFunction
 
 Bool Function SaveSettings()
 	int data = JMap_object()
-	JMap_SetInt(data, "PlayerEnabled", 			PlayerEnabled as int) as bool
-	JMap_SetInt(data, "NPCsEnabled", 			NPCsEnabled as int) as bool
+	JMap_SetInt(data, "ModEnabled", 				ModEnabled as int) as bool
+	JMap_SetInt(data, "PlayerEnabled", 				PlayerEnabled as int) as bool
+	JMap_SetInt(data, "NPCsEnabled", 				NPCsEnabled as int) as bool
+	JMap_SetInt(data, "ArmNodeChanges", 			ArmNodeChanges as Int) as Bool
+	JMap_SetInt(data, "ThighNodeChanges", 			ThighNodeChanges as Int) as Bool
+	JMap_SetInt(data, "TailNodeChanges", 			TailNodeChanges as Int) as Bool
+	JMap_SetInt(data, "FemaleNormalChanges", 		FemaleNormalChanges as Int) as Bool
+	JMap_SetInt(data, "MaleNormalChanges", 			MaleNormalChanges as Int) as Bool
+	JMap_SetObj(data, "FemaleNormalBreakpoints", 	JArray_objectWithFloats(FemaleNormalBreakpoints))
+	JMap_SetObj(data, "MaleNormalBreakpoints", 		JArray_objectWithFloats(MaleNormalBreakpoints))
+	JMap_SetObj(data, "FemaleNormals", 				JArray_objectWithStrings(FemaleNormals))
+	JMap_SetObj(data, "MaleNormals", 				JArray_objectWithStrings(MaleNormals))
+	JMap_SetFlt(data, "ArmNodeFactor", 				ArmNodeFactor)
+	JMap_SetFlt(data, "ThighNodeFactor", 			ThighNodeFactor)
+	JMap_SetFlt(data, "TailNodeFactor", 			TailNodeFactor)
+	JMap_SetFlt(data, "DropFeeding", 				DropFeeding.GetValue())
+
+	JMap_SetInt(data, "WeightLossEnabled", 			WeightLossEnabled as int) as bool
 	JMap_SetFlt(data, "WeightLoss", 			WeightLoss)
 	JMap_SetFlt(data, "WeightRate", 			WeightRate)
 	JMap_SetFlt(data, "MaximumWeight", 			MaximumWeight)
@@ -1006,6 +1092,8 @@ Bool Function SaveSettings()
 	JMap_SetFlt(data, "IngredientBaseGain", 	IngredientBaseGain)
 	JMap_SetFlt(data, "PotionBaseGain", 		PotionBaseGain)
 	JMap_SetFlt(data, "FoodBaseGain", 			FoodBaseGain)
+
+	JMap_SetFlt(data, "VoreBaseGain", 			VoreBaseGain)
 	JMap_SetFlt(data, "HighValueMultiplier", 	HighValueMultiplier)
 	JMap_SetObj(data, "FemaleSliderStrings", 	JArray_objectWithStrings(FemaleSliderStrings))
 	JMap_SetObj(data, "FemaleSliderHighs", 		JArray_objectWithFloats(FemaleSliderHighs))
