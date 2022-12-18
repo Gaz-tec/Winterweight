@@ -46,7 +46,7 @@ endEvent
 /;
 
 int function GetVersion()
-	return 100
+	return 101
 endFunction
 
 Event OnVersionUpdate(int newVersion)
@@ -55,7 +55,7 @@ EndEvent
 
 Function Upgrade(int oldVersion, int newVersion)
     if oldVersion < newVersion
-        Core.ResetActorWeights()
+        ;Core.ResetActorWeights()
     endif
 endFunction
 
@@ -332,7 +332,7 @@ Function AddMorphQuads(String[] morphNames, float[] multLow, float[] multHigh, i
 		;int[] quad = JArray_asIntArray(oq)
 		;debug.messagebox(quad[1] + " and " +quad[0])
 		;sliderCustomisation = new Int[4]
-		;iType = sliderCustomisation[1]
+		iType = sliderCustomisation[1]
 		iIndex = sliderCustomisation[0]
 
 		String[] Sliders
@@ -1547,17 +1547,17 @@ event OnOptionSelect(int oid)
 		endIf
 
 		int oq = JIntMap_GetObj(optionsMap, oid)
-		if !AssertExists(PREFIX, "OnOptionSelect", "oq", oq)
-			return
-		endIf
+		;if !AssertExists(PREFIX, "OnOptionSelect", "oq", oq)	;Faulty. Fix!
+		;	return
+		;endIf
 
 		SliderCustomLock = True
 		int[] quad = JArray_asIntArray(oq)
 
-		int iPosition = quad[0] + 4
-		if iPosition % 2 > 0
-			iPosition = quad[0] + 3
-		endif
+		;int iPosition = quad[0] + 4
+		;if iPosition % 2 > 0
+		;	iPosition = quad[0] + 3
+		;endif
 		;debug.MessageBox("pos: " +iPosition)
 		SetCursorPosition(2)
 		SetCursorFillMode(LEFT_TO_RIGHT)
