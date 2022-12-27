@@ -6,7 +6,7 @@ CREDIT: Ousnius, MarkDF, and CreationClub Survival Mode for providing the basis 
 }
 
 import Winterweight_JCDomain
-Import Logging
+Import WinterweightLogging
 
 Actor Property PlayerRef Auto
 Armor Property HandsArmor Auto
@@ -125,6 +125,7 @@ Event OnInit()
     endIf
 
 	Gainers = PapyrusUtil.ActorArray(128)
+	Gainers[0] = PlayerRef
 	
 	RegisterForModEvent("Winterweight_ItemConsume", "ItemConsume")
 	CheckRefactor()	;Checks for Devourment Refactor.
@@ -403,7 +404,7 @@ Bool Function ChangeActorWeight(Actor target, float afChange, float afSplitThres
 		Return False
 	EndIf
 
-	If Gainers.Find(target) == -1
+	If Gainers.Find(target) == -1	;If not in array. Array used for WeightLoss & tracking.
 		int iIndex = Gainers.Find(None)
 		Gainers[iIndex] = target
 	EndIf
@@ -411,7 +412,10 @@ Bool Function ChangeActorWeight(Actor target, float afChange, float afSplitThres
 	int iAdds = Math.Ceiling(afChange / afSplitThreshold)
 	if iAdds == 0
 		iAdds = 1
+	elseIf iAdds < 0 && afChange < 0.0
+		iAdds = iAdds * -1
 	endIf
+	
 	Float fRaw = afChange / iAdds
 	If StorageUtil.FloatListAdd(target, MODKEY, fRaw)
 		iAdds -= 1
@@ -420,7 +424,7 @@ Bool Function ChangeActorWeight(Actor target, float afChange, float afSplitThres
 			iAdds -= 1
 		EndWhile
 		StorageUtil.FormListAdd(None, MODKEY, target)
-		ConsoleUtil.PrintMessage("Actor " + Namer(target, true) + " changed weight by " + afChange + ".")
+		ConsoleUtil.PrintMessage("Actor " + Namer(target, true) + " changed weight by " + afChange + "." + " Stage: " +fRaw)
 		If !UpdateMutex
 			FullActorUpdate()
 		EndIf

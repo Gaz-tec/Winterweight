@@ -5,7 +5,7 @@ PURPOSE: Provides my Weight Gain mods' MCM.
 }
 
 import Winterweight_JCDomain
-import Logging
+import WinterweightLogging
 
 WinterweightCore Property Core Auto
 Actor Property PlayerRef Auto
@@ -46,7 +46,7 @@ endEvent
 /;
 
 int function GetVersion()
-	return 101
+	return 102
 endFunction
 
 Event OnVersionUpdate(int newVersion)
