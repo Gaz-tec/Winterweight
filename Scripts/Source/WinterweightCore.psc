@@ -27,6 +27,7 @@ Float[] Property CreatureSliderLows auto
 
 GlobalVariable Property GameDaysPassed Auto	;Vanilla global.
 GlobalVariable Property DropFeeding Auto
+GlobalVariable Property DropFeedingAll Auto
 
 Form[] Property HighValueFood Auto
 Form[] Property NoValueFood Auto
@@ -1023,6 +1024,7 @@ Bool Function LoadSettings()
 	ThighNodeFactor =			JMap_GetFlt(data, "ThighNodeFactor", ThighNodeFactor)
 	TailNodeFactor =			JMap_GetFlt(data, "TailNodeFactor", TailNodeFactor)
 	DropFeeding.SetValue(JMap_GetFlt(data, "DropFeeding", DropFeeding.GetValue()))
+	DropFeedingAll.SetValue(JMap_GetFlt(data, "DropFeedingAll", DropFeedingAll.GetValue()))
 	WeightLossEnabled =			JMap_GetInt(data, "WeightLossEnabled", WeightLossEnabled as int) as bool
 	WeightLoss =			JMap_GetFlt(data, "WeightLoss", WeightLoss)
 	WeightRate =			JMap_GetFlt(data, "WeightRate", WeightRate)
@@ -1087,7 +1089,8 @@ Bool Function SaveSettings()
 	JMap_SetFlt(data, "ThighNodeFactor", 			ThighNodeFactor)
 	JMap_SetFlt(data, "TailNodeFactor", 			TailNodeFactor)
 	JMap_SetFlt(data, "DropFeeding", 				DropFeeding.GetValue())
-
+	JMap_SetFlt(data, "DropFeedingAll", 			DropFeedingAll.GetValue())
+	
 	JMap_SetInt(data, "WeightLossEnabled", 			WeightLossEnabled as int) as bool
 	JMap_SetFlt(data, "WeightLoss", 			WeightLoss)
 	JMap_SetFlt(data, "WeightRate", 			WeightRate)

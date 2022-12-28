@@ -46,7 +46,7 @@ endEvent
 /;
 
 int function GetVersion()
-	return 102
+	return 103
 endFunction
 
 Event OnVersionUpdate(int newVersion)
@@ -134,8 +134,12 @@ Event OnPageReset(string page)
 
 		AddHeaderOption("Companion Features")
 		AddEmptyOption()
-		AddToggleOptionST("DropFeedState", "Companions Eat Dropped Food", Core.DropFeeding.GetValue() as Bool)
-		AddEmptyOption()
+		int iDropFeedFlag = 0x00
+		if Core.DropFeedingAll.GetValue() == 1.0
+			iDropFeedFlag = 0x01
+		endif
+		AddToggleOptionST("DropFeedState", "Companions Eat Dropped Food", Core.DropFeeding.GetValue() as Bool, iDropFeedFlag)
+		AddToggleOptionST("DropFeedAllState", "NPCs Eat Dropped Food", Core.DropFeedingAll.GetValue() as Bool)
 
 		AddHeaderOption("Normal Map Swaps")
 		AddEmptyOption()
@@ -988,8 +992,10 @@ endstate
 state DropFeedState
 	event OnSelectST()
 		If Core.DropFeeding.GetValue() == 0.0
+			;SetToggleOptionValueST(true, a_stateName = "DropFeedAllState")
 			Core.DropFeeding.SetValue(1.0)
 		Else
+			;SetToggleOptionValueST(false, a_stateName = "DropFeedAllState")
 			Core.DropFeeding.SetValue(0.0)
 		EndIf
 		setToggleOptionValueST(Core.DropFeeding.GetValue() as Bool)
@@ -1000,6 +1006,28 @@ state DropFeedState
 	endEvent
 	event OnHighlightST()
 		SetInfoText("If enabled, your closest companion will pick up and eat any food items you drop.")
+	endEvent
+endstate
+
+state DropFeedAllState
+	event OnSelectST()
+		If Core.DropFeedingAll.GetValue() == 0.0
+			Core.DropFeedingAll.SetValue(1.0)
+			Core.DropFeeding.SetValue(1.0)
+			SetToggleOptionValueST(True, a_stateName = "DropFeedState")
+			SetOptionFlagsST(OPTION_FLAG_DISABLED, a_stateName = "DropFeedState")
+		Else
+			Core.DropFeedingAll.SetValue(0.0)
+			SetOptionFlagsST(OPTION_FLAG_NONE, a_stateName = "DropFeedState")
+		EndIf
+		setToggleOptionValueST(Core.DropFeedingAll.GetValue() as Bool)
+	endEvent
+	event OnDefaultST()
+		Core.DropFeedingAll.SetValue(0.0)
+		setToggleOptionValueST(Core.DropFeedingAll.GetValue() as Bool)
+	endEvent
+	event OnHighlightST()
+		SetInfoText("If enabled, the closest NPC will pick up and eat any food items you drop.")
 	endEvent
 endstate
 
