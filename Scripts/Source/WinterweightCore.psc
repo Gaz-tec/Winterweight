@@ -55,6 +55,7 @@ Float Property TailNodeFactor = 16.0 Auto Hidden
 Float Property IngredientBaseGain = 0.04 Auto Hidden
 Float Property PotionBaseGain = 0.02 Auto Hidden
 Float Property FoodBaseGain = 0.10 Auto Hidden
+Float Property VampireBaseGain = 0.30 Auto Hidden
 Float Property VoreBaseGain = 0.9 Auto Hidden
 Float Property HighValueMultiplier = 2.0 Auto Hidden
 Quest Property RefactorManager = None Auto Hidden	
@@ -72,25 +73,23 @@ String Property SettingsFileName = "data\\skse\\plugins\\winterweight\\settings.
 String MODKEY = "Winterweight.esp"
 String PREFIX = "WinterweightCore"
 
-String CMETails = "CME Tail Pelvis [Pelv]"
-
 ;Bool DetectedSleepEvent = False
-
 ;Float SleepStartHour = 0.0
 ;Float SleepEndHour = 0.0
 Bool UpdateMutex = False
+;Float LastRealTime = 0.0
 Float LastGameHours = 0.0
-Int Ticks = 0	;Holding variable for Ticks since last processed while we're doing WeightLoss.
+Float Ticks = 0.0	;Holding variable for Ticks since last processed while we're doing WeightLoss.
 
 Event OnInit()
 	EventRegistration()
 	FemaleNormals = New String[3]
 	FemaleArgonianNormals = New String[3]
 	FemaleKhajiitNormals = New String[3]
-	FemaleNormals[0] = "Actors\\Character\\Female\\FemaleBody_1_msn.dds"
-	FemaleArgonianNormals[0] = "Actors\\Character\\argonianfemale\\argonianfemalebody_msn.dds"
-	FemaleKhajiitNormals[0] = "Actors\\Character\\khajiitfemale\\femalebody_msn.dds"
-	FemaleNormals[1] = "Actors\\Character\\Winterweight\\Female\\FemaleBody_chubby1_msn.dds"
+	FemaleNormals[0] = "Female\\FemaleBody_1_msn.dds"
+	FemaleArgonianNormals[0] = "argonianfemale\\argonianfemalebody_msn.dds"
+	FemaleKhajiitNormals[0] = "khajiitfemale\\femalebody_msn.dds"
+	FemaleNormals[1] = "Winterweight\\Female\\FemaleBody_chubby1_msn.dds"
 	;FemaleArgonianNormals[1] = "Actors\\Character\\\argonianfemale\\argonianfemalebody_msn.dds"
 	;FemaleKhajiitNormals[1] = "Actors\\Character\\khajiitfemale\\femalebody_msn.dds"
 	FemaleNormalBreakpoints = New Float[3]
@@ -100,9 +99,9 @@ Event OnInit()
 	MaleNormals = New String[3]
 	MaleArgonianNormals = New String[3]
 	MaleKhajiitNormals = New String[3]
-	MaleNormals[0] = "Actors\\Character\\Male\\MaleBody_1_msn.dds"
-	MaleArgonianNormals[0] = "Actors\\Character\\argonianmale\\argonianmalebody_msn.dds"
-	MaleKhajiitNormals[0] = "Actors\\Character\\khajiitmale\\malebody_msn.dds"
+	MaleNormals[0] = "Male\\MaleBody_1_msn.dds"
+	MaleArgonianNormals[0] = "argonianmale\\argonianmalebody_msn.dds"
+	MaleKhajiitNormals[0] = "khajiitmale\\malebody_msn.dds"
 	MaleNormalBreakpoints = New Float[3]
 	MaleNormalBreakpoints[1] = 1.0
 	MaleNormalBreakpoints[2] = 1.5
@@ -127,6 +126,10 @@ Event OnInit()
 
 	Gainers = PapyrusUtil.ActorArray(128)
 	Gainers[0] = PlayerRef
+
+	If !po3_sksefunctions.IsSurvivalModeActive()
+		WinterMCM.SurvivalPerkEnabled = False
+	EndIf
 	
 	RegisterForModEvent("Winterweight_ItemConsume", "ItemConsume")
 	CheckRefactor()	;Checks for Devourment Refactor.
@@ -186,22 +189,20 @@ EndEvent
 
 Function EventRegistration()
 	RunPatchups()
-    If ModEnabled
-		If WeightLossEnabled
-			;RegisterForSleep()	;Our logic being, time passing only really matters if weightloss is a thing.
-			;RegisterForModEvent("HookAnimationEnd", "SexlabAnimationEnd")
-			LastGameHours = GameDaysPassed.GetValue() * 24
-			RegisterForSingleUpdateGameTime(WeightRate)
-		EndIf
+    If ModEnabled && WeightLossEnabled
+		RegisterForSleep()	;Our logic being, time passing only really matters if weightloss is a thing.
+		;RegisterForModEvent("HookAnimationEnd", "SexlabAnimationEnd")
+		LastGameHours = GameDaysPassed.GetValue() * 24
+		RegisterForSingleUpdateGameTime(WeightRate)
     Else 
 		;UnregisterForModEvent("HookAnimationEnd")
 		UnregisterForUpdateGameTime()
-		;UnregisterForSleep()
+		UnregisterForSleep()
     EndIf
 EndFunction
 
-Int Function GetTicks(Float currentTimeInGameHours, Float lastTimeInGameHours)	;This function shamelessly ripped off from CreationClub SurvivalMode Survival_NeedBase.
-	Int returnticks = (currentTimeInGameHours - lastTimeInGameHours) as Int * (1.0 / WeightRate) as Int
+Float Function GetTicks(Float currentTimeInGameHours, Float lastTimeInGameHours)	;This function shamelessly ripped off from CreationClub SurvivalMode Survival_NeedBase.
+	Float returnticks = (currentTimeInGameHours - lastTimeInGameHours) * (1.0 / WeightRate)
 	if returnticks <= 0
 		returnticks = 1
 	endIf
@@ -223,11 +224,13 @@ function NeedUpdateGameTime()
 	Float currentTimeInGameHours = GameDaysPassed.GetValue() * 24
 	If LastGameHours == 0.0
 		LastGameHours = currentTimeInGameHours
+		;LastRealTime = Utility.getCurrentRealTime()
 		Log1(PREFIX, "NeedUpdateGameTime()", "First update, weight loss skipped.")
 	Else
 		Ticks = self.GetTicks(currentTimeInGameHours, LastGameHours)
 		Log3(PREFIX, "NeedUpdateGameTime()", "Processing weight loss. Ticks: " +Ticks, " CurrentTimeInGameHours: " +currentTimeInGameHours, "LastGameHours: " +LastGameHours)
 		LastGameHours = currentTimeInGameHours
+		;LastRealTime = Utility.getCurrentRealTime()
 		Int iIndex = 0
 		While iIndex < Gainers.Length
 			If Gainers[iIndex] != None
@@ -235,24 +238,49 @@ function NeedUpdateGameTime()
 			EndIf
 			iIndex += 1
 		EndWhile
-		;Ticks = 0
 	EndIf
 endFunction
 
 Function ActorWeightLoss(Actor akTarget)
-	ChangeActorWeight(akTarget, (WeightLoss * -1) * (Ticks as Float))
-	Log2(PREFIX, "ActorWeightLoss()", "Actor: " +akTarget.GetDisplayName(), "WeightLoss: " +(WeightLoss * -1) * (Ticks as Float))
+	ChangeActorWeight(akTarget, (WeightLoss * -1) * Ticks)
+	Log2(PREFIX, "ActorWeightLoss()", "Actor: " +akTarget.GetDisplayName(), "WeightLoss: " +(WeightLoss * -1) * Ticks)
 EndFunction
 
-;/
 Event OnSleepStart(float afSleepStartTime, float afDesiredSleepEndTime)
-	SleepStartHour = GameDaysPassed.GetValue() * 24
+	UnregisterForUpdateGameTime()
+	NeedUpdateGameTime()
+	ConsoleUtil.PrintMessage("Got sleep event. Cancelled timer.")
 EndEvent
 
 Event OnSleepStop(bool abInterrupted)
-	SleepEndHour = GameDaysPassed.GetValue() * 24
+	Float SleepEndHour = GameDaysPassed.GetValue() * 24
+	Float fSleepDelta = (SleepEndHour - LastGameHours)
+	ConsoleUtil.PrintMessage("Got sleep stop event. LastGameHours: " +LastGameHours+ " fSleepDelta: " +fSleepDelta)
+	Log2(PREFIX, "OnSleepStop()", "LastGameHours: " +LastGameHours, "fSleepDelta: " +fSleepDelta)
+	LastGameHours = LastGameHours + (fSleepDelta * 0.8)
+	OnUpdateGameTime()
 EndEvent
-/;
+
+Event OnLocationChange(Location akOldLoc, Location akNewLoc)
+	UnregisterForUpdateGameTime()
+	If ModEnabled
+		If WeightLossEnabled
+			float fTravelDelta = (GameDaysPassed.GetValue() * 24) - LastGameHours
+			;float dtReal = Utility.getCurrentRealTime() - LastRealTime
+			If fTravelDelta > 4 && WeightRate < fTravelDelta
+			;If more than 4 hours game-time passed we assume the player fast-travelled.
+				ConsoleUtil.PrintMessage("Got location change event. LastGameHours: " +LastGameHours+ " fTravelDelta: " +fTravelDelta)
+				Log2(PREFIX, "OnLocationChange()", "LastGameHours: " +LastGameHours, "fTravelDelta: " +fTravelDelta)
+				LastGameHours = LastGameHours + (fTravelDelta * 0.8)
+				OnUpdateGameTime()
+			EndIf
+		EndIf
+	EndIf
+EndEvent
+
+Event OnVampireFeed(Actor akTarget)
+	ChangeActorWeight(PlayerRef, VampireBaseGain)
+EndEvent
 
 ;/
 Event SexlabAnimationEnd(int tid, bool HasPlayer)
@@ -397,7 +425,7 @@ EndFunction
 Bool Function ChangeActorWeight(Actor target, float afChange, float afSplitThreshold = 0.025)
 {All-purpose function for losing and gaining Weight.}
 
-	If !ModEnabled || target == None
+	If !ModEnabled || target == None || afChange == 0.0
 		Return False
 	ElseIf target == PlayerRef && (PlayerEnabled == False)
 		Return False
@@ -464,11 +492,20 @@ EndFunction
 Function FullFeatureUpdate(Actor akTarget, Float afWeight)
 {Convenience function to call all visual features on the Actor to update.}
 
-	BodyMorphUpdate(akTarget, afWeight)
-	ArmNodeUpdate(akTarget, afWeight)
-	ThighNodeUpdate(akTarget, afWeight)
-	TailNodeUpdate(akTarget, afWeight)
-	NormalMapUpdate(akTarget, afWeight)
+	If akTarget == PlayerRef
+		If afWeight < 0.0
+			WinterMCM.PlayerWeightPercent = (afWeight / MinimumWeight) * -1
+		Else
+			WinterMCM.PlayerWeightPercent = afWeight / MaximumWeight
+		EndIf
+	EndIf
+	If akTarget.Is3DLoaded()
+		BodyMorphUpdate(akTarget, afWeight)
+		ArmNodeUpdate(akTarget, afWeight)
+		ThighNodeUpdate(akTarget, afWeight)
+		TailNodeUpdate(akTarget, afWeight)
+		NormalMapUpdate(akTarget, afWeight)
+	EndIf
 
 EndFunction
 
@@ -518,26 +555,29 @@ Function NormalMapUpdate(Actor akTarget, Float afWeight)
 
 	If akTarget.HasKeywordString("ActorTypeNPC") && (FemaleNormalChanges || MaleNormalChanges)
 
+		String sSelectedNormal
 		String StartingTex = NiOverride.GetSkinOverrideString(akTarget, IsFemale, false, 0x04, 9, 1)
-		String FetchedTex
+		Int TargetRace = akTarget.GetLeveledActorBase().GetRace().GetFormID()
 		bool isFemale = IsFemale(akTarget)
 		If isFemale && FemaleNormalChanges
 			int iIndex = FemaleNormals.Length - 1
 			While iIndex > -1
-				If afWeight >= FemaleNormalBreakpoints[iIndex] && FemaleNormals[iIndex] != "" && StartingTex != FemaleNormals[iIndex]
-					FetchedTex = FemaleNormals[iIndex]
+				sSelectedNormal = FemaleNormals[iIndex]
+				If TargetRace == 79680 || TargetRace == 559162	;Argonian & ArgonianVampire
+					sSelectedNormal = FemaleArgonianNormals[iIndex]
+				ElseIf TargetRace == 79685 || TargetRace == 559173	;Khajiit & KhajiitVampire
+					sSelectedNormal = FemaleKhajiitNormals[iIndex]
+				EndIf
+				If afWeight >= FemaleNormalBreakpoints[iIndex] && sSelectedNormal != "" && StartingTex != sSelectedNormal
 					Armor Hands = akTarget.GetWornForm(0x08) as Armor
 					If !Hands
 						akTarget.EquipItem(HandsArmor, false, true)
 					EndIf
-					If akTarget.HasKeywordString("IsBeastRace")
-						Int TargetRace = akTarget.GetLeveledActorBase().GetRace().GetFormID()
-						;If target race is Argonian, ArgonianVampire, Khajiit or KhajiitVampire.
-						If TargetRace == 79680 || TargetRace == 559162 || TargetRace == 79685 || TargetRace == 559173
-							akTarget.EquipItem(TailArmor, false, true)
-						EndIf
+					;If target race is Argonian, ArgonianVampire, Khajiit or KhajiitVampire.
+					If TargetRace == 79680 || TargetRace == 559162 || TargetRace == 79685 || TargetRace == 559173
+						akTarget.EquipItem(TailArmor, false, true)		
 					EndIf
-					NiOverride.AddSkinOverrideString(akTarget, IsFemale, false, 0x04, 9, 1, FemaleNormals[iIndex], True)
+					NiOverride.AddSkinOverrideString(akTarget, IsFemale, false, 0x04, 9, 1, "Actors\\Character\\" + sSelectedNormal, True)
 					
 					;NiOverride.AddSkinOverrideString(akTarget, IsFemale, false, 0x08, 9, 1, "Textures\\Actors\\Character\\Female\\FemaleHands_1_msn.dds", True)
 					;NiOverride.AddSkinOverrideString(akTarget, IsFemale, false, 0x04, 9, 1, "Textures\\"+FemaleNormals[iIndex], True)
@@ -551,27 +591,29 @@ Function NormalMapUpdate(Actor akTarget, Float afWeight)
 		ElseIf !isFemale && MaleNormalChanges
 			int iIndex = MaleNormals.Length - 1
 			While iIndex > -1
-				If afWeight >= MaleNormalBreakpoints[iIndex] && MaleNormals[iIndex] != "" && StartingTex != MaleNormals[iIndex]
-					FetchedTex = MaleNormals[iIndex]
+				sSelectedNormal = MaleNormals[iIndex]
+				If TargetRace == 79680 || TargetRace == 559162	;Argonian & ArgonianVampire
+					sSelectedNormal = MaleArgonianNormals[iIndex]
+				ElseIf TargetRace == 79685 || TargetRace == 559173	;Khajiit & KhajiitVampire
+					sSelectedNormal = MaleKhajiitNormals[iIndex]
+				EndIf
+				If afWeight >= MaleNormalBreakpoints[iIndex] && sSelectedNormal != "" && StartingTex != sSelectedNormal
 					Armor Hands = akTarget.GetWornForm(0x08) as Armor
 					If !Hands
 						akTarget.EquipItem(HandsArmor, false, true)
 					EndIf
-					If akTarget.HasKeywordString("IsBeastRace")
-						Int TargetRace = akTarget.GetLeveledActorBase().GetRace().GetFormID()
-						;If target race is Argonian, ArgonianVampire, Khajiit or KhajiitVampire.
-						If TargetRace == 79680 || TargetRace == 559162 || TargetRace == 79685 || TargetRace == 559173
-							akTarget.EquipItem(TailArmor, false, true)
-						EndIf
+					;If target race is Argonian, ArgonianVampire, Khajiit or KhajiitVampire.
+					If TargetRace == 79680 || TargetRace == 559162 || TargetRace == 79685 || TargetRace == 559173
+						akTarget.EquipItem(TailArmor, false, true)
 					EndIf
-					NiOverride.AddSkinOverrideString(akTarget, IsFemale, false, 0x04, 9, 1, MaleNormals[iIndex], True)
+					NiOverride.AddSkinOverrideString(akTarget, IsFemale, false, 0x04, 9, 1, "Actors\\Character\\" + sSelectedNormal, True)
 					iIndex = -1 ;We applied a higher Normal, now leave it alone and exit.
 				EndIf
 				iIndex -= 1
 			EndWhile
 		EndIf
 		;NiOverride.UpdateModelWeight(akTarget)
-		If StartingTex != FetchedTex
+		If StartingTex != sSelectedNormal
 			NiOverride.ApplySkinOverrides(akTarget)
 		EndIf
 	EndIf
@@ -599,10 +641,22 @@ Function ThighNodeUpdate(Actor akTarget, Float afWeight)
 			XYZ[0] = XYZ[0] + fModifier
 			NiOverride.AddNodeTransformRotation(akTarget, False, isFemale, "CME L Hip", MODKEY, XYZ)
 			NiOverride.UpdateNodeTransform(akTarget, false, isFemale, "CME L Hip")
-		Else
-			NiOverride.RemoveNodeTransformRotation(akTarget, False, isFemale, "CME R Hip", MODKEY)
-			NiOverride.RemoveNodeTransformRotation(akTarget, False, isFemale, "CME L Hip", MODKEY)
+		;Else
+			;NiOverride.RemoveNodeTransformRotation(akTarget, False, isFemale, "CME R Hip", MODKEY)
+			;NiOverride.RemoveNodeTransformRotation(akTarget, False, isFemale, "CME L Hip", MODKEY)
 		EndIf
+	EndIf
+
+EndFunction
+
+Function ThighNodeRemove(Actor akTarget)
+
+	If akTarget.HasKeywordString("ActorTypeNPC")
+		bool isFemale = IsFemale(akTarget)
+		NiOverride.RemoveNodeTransformRotation(akTarget, False, isFemale, "CME R Hip", MODKEY)
+		NiOverride.RemoveNodeTransformRotation(akTarget, False, isFemale, "CME L Hip", MODKEY)
+		NiOverride.UpdateNodeTransform(akTarget, false, isFemale, "CME R Hip")
+		NiOverride.UpdateNodeTransform(akTarget, false, isFemale, "CME L Hip")
 	EndIf
 
 EndFunction
@@ -631,12 +685,28 @@ Function ArmNodeUpdate(Actor akTarget, Float afWeight)
 			NiOverride.UpdateNodeTransform(akTarget, false, isFemale, "CME L Clavicle [LClv]")
 			NiOverride.AddNodeTransformRotation(akTarget, False, isFemale, "CME L Shoulder", MODKEY, XYZ)
 			NiOverride.UpdateNodeTransform(akTarget, false, isFemale, "CME L Shoulder")
-		Else
-			NiOverride.RemoveNodeTransformRotation(akTarget, False, isFemale, "CME R Clavicle [RClv]", MODKEY)
-			NiOverride.RemoveNodeTransformRotation(akTarget, False, isFemale, "CME R Shoulder", MODKEY)
-			NiOverride.RemoveNodeTransformRotation(akTarget, False, isFemale, "CME L Clavicle [LClv]", MODKEY)
-			NiOverride.RemoveNodeTransformRotation(akTarget, False, isFemale, "CME L Shoulder", MODKEY)
+		;Else
+			;NiOverride.RemoveNodeTransformRotation(akTarget, False, isFemale, "CME R Clavicle [RClv]", MODKEY)
+			;NiOverride.RemoveNodeTransformRotation(akTarget, False, isFemale, "CME R Shoulder", MODKEY)
+			;NiOverride.RemoveNodeTransformRotation(akTarget, False, isFemale, "CME L Clavicle [LClv]", MODKEY)
+			;NiOverride.RemoveNodeTransformRotation(akTarget, False, isFemale, "CME L Shoulder", MODKEY)
 		EndIf
+	EndIf
+
+EndFunction
+
+Function ArmNodeRemove(Actor akTarget)
+
+	If akTarget.HasKeywordString("ActorTypeNPC")
+		bool isFemale = IsFemale(akTarget)
+		NiOverride.RemoveNodeTransformRotation(akTarget, False, isFemale, "CME R Clavicle [RClv]", MODKEY)
+		NiOverride.RemoveNodeTransformRotation(akTarget, False, isFemale, "CME R Shoulder", MODKEY)
+		NiOverride.RemoveNodeTransformRotation(akTarget, False, isFemale, "CME L Clavicle [LClv]", MODKEY)
+		NiOverride.RemoveNodeTransformRotation(akTarget, False, isFemale, "CME L Shoulder", MODKEY)
+		NiOverride.UpdateNodeTransform(akTarget, false, isFemale, "CME R Clavicle [RClv]")
+		NiOverride.UpdateNodeTransform(akTarget, false, isFemale, "CME R Shoulder")
+		NiOverride.UpdateNodeTransform(akTarget, false, isFemale, "CME L Clavicle [LClv]")
+		NiOverride.UpdateNodeTransform(akTarget, false, isFemale, "CME L Shoulder")
 	EndIf
 
 EndFunction
@@ -656,11 +726,21 @@ Function TailNodeUpdate(Actor akTarget, Float afWeight)
 			;XYZ[1] = ((XYZ[1] + fModifier) / 4) * -1	;Out
 			
 			XYZ[2] = XYZ[2] + fModifier	;Up
-			NiOverride.AddNodeTransformPosition(akTarget, False, isFemale, CMETails, MODKEY, XYZ)
-			NiOverride.UpdateNodeTransform(akTarget, false, isFemale, CMETails)
-		Else
-			NiOverride.RemoveNodeTransformPosition(akTarget, False, isFemale, CMETails, MODKEY)
+			NiOverride.AddNodeTransformPosition(akTarget, False, isFemale, "CME Tail Pelvis [Pelv]", MODKEY, XYZ)
+			NiOverride.UpdateNodeTransform(akTarget, false, isFemale, "CME Tail Pelvis [Pelv]")
+		;Else
+			;NiOverride.RemoveNodeTransformPosition(akTarget, False, isFemale, CMETails, MODKEY)
 		EndIf
+	EndIf
+
+EndFunction
+
+Function TailNodeRemove(Actor akTarget)
+
+	If akTarget.HasKeywordString("ActorTypeNPC")
+		bool isFemale = IsFemale(akTarget)
+		NiOverride.RemoveNodeTransformPosition(akTarget, False, isFemale, "CME Tail Pelvis [Pelv]", MODKEY)
+		NiOverride.UpdateNodeTransform(akTarget, false, isFemale, "CME Tail Pelvis [Pelv]")
 	EndIf
 
 EndFunction
@@ -1026,6 +1106,10 @@ Bool Function LoadSettings()
 	DropFeeding.SetValue(JMap_GetFlt(data, "DropFeeding", DropFeeding.GetValue()))
 	DropFeedingAll.SetValue(JMap_GetFlt(data, "DropFeedingAll", DropFeedingAll.GetValue()))
 	WeightLossEnabled =			JMap_GetInt(data, "WeightLossEnabled", WeightLossEnabled as int) as bool
+	WinterMCM.WarmthAmount =		JMap_GetInt(data, "WarmthAmount", WinterMCM.WarmthAmount)
+	WinterMCM.SurvivalPerkEnabled =			JMap_GetInt(data, "SurvivalPerkEnabled", WinterMCM.SurvivalPerkEnabled as int) as bool
+	WinterMCM.StaminaAmount =		JMap_GetInt(data, "StaminaAmount", WinterMCM.StaminaAmount)
+	WinterMCM.StaminaPerkEnabled =			JMap_GetInt(data, "StaminaPerkEnabled", WinterMCM.StaminaPerkEnabled as int) as bool
 	WeightLoss =			JMap_GetFlt(data, "WeightLoss", WeightLoss)
 	WeightRate =			JMap_GetFlt(data, "WeightRate", WeightRate)
 	MaximumWeight =			JMap_GetFlt(data, "MaximumWeight", MaximumWeight)
@@ -1033,6 +1117,7 @@ Bool Function LoadSettings()
 	IngredientBaseGain =	JMap_GetFlt(data, "IngredientBaseGain", IngredientBaseGain)
 	PotionBaseGain =		JMap_GetFlt(data, "PotionBaseGain", PotionBaseGain)
 	FoodBaseGain =			JMap_GetFlt(data, "FoodBaseGain", FoodBaseGain)
+	VampireBaseGain =			JMap_GetFlt(data, "VampireBaseGain", VampireBaseGain)
 	VoreBaseGain =			JMap_GetFlt(data, "VoreBaseGain", VoreBaseGain)
 	HighValueMultiplier = 	JMap_GetFlt(data, "HighValueMultiplier", HighValueMultiplier)
 
@@ -1092,6 +1177,10 @@ Bool Function SaveSettings()
 	JMap_SetFlt(data, "DropFeedingAll", 			DropFeedingAll.GetValue())
 	
 	JMap_SetInt(data, "WeightLossEnabled", 			WeightLossEnabled as int) as bool
+	JMap_SetInt(data, "SurvivalPerkEnabled", 				WinterMCM.SurvivalPerkEnabled as int) as bool
+	JMap_SetInt(data, "WarmthAmount", 			WinterMCM.WarmthAmount)
+	JMap_SetInt(data, "StaminaPerkEnabled", 				WinterMCM.StaminaPerkEnabled as int) as bool
+	JMap_SetInt(data, "StaminaAmount", 			WinterMCM.StaminaAmount)
 	JMap_SetFlt(data, "WeightLoss", 			WeightLoss)
 	JMap_SetFlt(data, "WeightRate", 			WeightRate)
 	JMap_SetFlt(data, "MaximumWeight", 			MaximumWeight)
@@ -1099,6 +1188,7 @@ Bool Function SaveSettings()
 	JMap_SetFlt(data, "IngredientBaseGain", 	IngredientBaseGain)
 	JMap_SetFlt(data, "PotionBaseGain", 		PotionBaseGain)
 	JMap_SetFlt(data, "FoodBaseGain", 			FoodBaseGain)
+	JMap_SetFlt(data, "VampireBaseGain", 			VampireBaseGain)
 
 	JMap_SetFlt(data, "VoreBaseGain", 			VoreBaseGain)
 	JMap_SetFlt(data, "HighValueMultiplier", 	HighValueMultiplier)

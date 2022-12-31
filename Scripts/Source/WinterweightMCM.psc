@@ -1,4 +1,4 @@
-ScriptName WinterweightMCM extends SKI_ConfigBase
+ScriptName WinterweightMCM extends SKI_ConfigBase Conditional
 {
 AUTHOR: Gaz
 PURPOSE: Provides my Weight Gain mods' MCM.
@@ -8,6 +8,13 @@ import Winterweight_JCDomain
 import WinterweightLogging
 
 WinterweightCore Property Core Auto
+Bool Property SurvivalPerkEnabled = True Auto Conditional
+Bool Property StaminaPerkEnabled = True Auto Conditional
+Spell Property WarmthSpell Auto
+Spell Property StaminaSpell Auto
+Float Property PlayerWeightPercent = 0.0 Auto Conditional
+Int Property WarmthAmount = 30 Auto Hidden
+Int Property StaminaAmount = 50 Auto Hidden
 Actor Property PlayerRef Auto
 
 String MODKEY = "Winterweight.esp"
@@ -46,7 +53,7 @@ endEvent
 /;
 
 int function GetVersion()
-	return 103
+	return 104
 endFunction
 
 Event OnVersionUpdate(int newVersion)
@@ -54,8 +61,21 @@ Event OnVersionUpdate(int newVersion)
 EndEvent
 
 Function Upgrade(int oldVersion, int newVersion)
-    if oldVersion < newVersion
-        ;Core.ResetActorWeights()
+    if newVersion >= 104 && oldVersion < 104
+		Utility.Wait(2.0)
+        Core.EventRegistration()	;Version 104 added sleep logic, so register for sleep.
+		Core.FemaleNormals[0] = "Female\\FemaleBody_1_msn.dds"	;104 changed texture formatting, so reset.
+		Core.FemaleNormals[1] = "Winterweight\\Female\\FemaleBody_chubby1_msn.dds"
+		Core.FemaleArgonianNormals[0] = "argonianfemale\\argonianfemalebody_msn.dds"
+		Core.FemaleKhajiitNormals[0] = "khajiitfemale\\femalebody_msn.dds"
+		Core.MaleNormals[0] = "Male\\MaleBody_1_msn.dds"
+		Core.MaleArgonianNormals[0] = "argonianmale\\argonianmalebody_msn.dds"
+		Core.MaleKhajiitNormals[0] = "khajiitmale\\malebody_msn.dds"
+		If !po3_sksefunctions.IsSurvivalModeActive()
+			SurvivalPerkEnabled = False
+		EndIf
+		PlayerRef.AddSpell(WarmthSpell, False)
+		PlayerRef.AddSpell(StaminaSpell, False)
     endif
 endFunction
 
@@ -112,11 +132,13 @@ Event OnPageReset(string page)
 		AddSliderOptionST("IngredientGainState", "Ingredient Gain", Core.IngredientBaseGain, "{3} * Item Weight")
 		AddSliderOptionST("PotionGainState", "Potion Gain", Core.PotionBaseGain, "{3} * Item Weight")
 		AddSliderOptionST("FoodGainState", "Food Gain", Core.FoodBaseGain, "{3} * Item Weight")
+		AddSliderOptionST("VampireGainState", "Vampire Gain", Core.VampireBaseGain, "{3} / Feeding")
 		If Core.RefactorManager
 			AddSliderOptionST("VoreGainState", "Vore Gain", Core.VoreBaseGain, "{3} / Same Sized Prey")
 		Else
 			AddEmptyOption()
 		EndIf
+		AddEmptyOption()
 
 		AddHeaderOption("Skeleton Adjustments")
 		AddEmptyOption()
@@ -131,6 +153,18 @@ Event OnPageReset(string page)
 		AddEmptyOption()
 		AddTextOptionST("ShowHighValueState", "Configure High Value Food", None)
 		AddTextOptionST("ShowNoValueState", "Configure No Value Food", None)
+
+		AddHeaderOption("Weight Effects")
+		AddEmptyOption()
+
+		int iSurvivalFlag = 0x00
+		if !po3_sksefunctions.IsSurvivalModeActive()
+			iSurvivalFlag = 0x01
+		endif
+		AddToggleOptionST("WarmthPerkState", "Survival Warmth", SurvivalPerkEnabled, iSurvivalFlag)
+		AddSliderOptionST("WarmthAmountState", "Warmth Amount", WarmthAmount, "{0} Warmth")
+		AddToggleOptionST("StaminaPerkState", "Stamina Reduction", StaminaPerkEnabled)
+		AddSliderOptionST("StaminaAmountState", "Stamina Loss Amount", StaminaAmount, "{0} Stamina")
 
 		AddHeaderOption("Companion Features")
 		AddEmptyOption()
@@ -423,13 +457,13 @@ state FemaleNormal0State
 	endEvent
 
 	event OnDefaultST()
-		Core.FemaleNormals[0] = "Actors\\Character\\Female\\FemaleBody_1_msn.dds"
+		Core.FemaleNormals[0] = "Female\\FemaleBody_1_msn.dds"
 		SetInputOptionValueST(Core.FemaleNormals[0])
 		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("The default Normal Map that will be applied to Females when they drop below the thresholds for any higher Normals.")
+		SetInfoText("The default Normal Map that will be applied to Females when they drop below the thresholds for any higher Normals. Data\\Textures\\Actors\\Character\\ is already appended, no need to write that part of the path.")
 	endEvent
 endState
 
@@ -445,13 +479,13 @@ state FemaleNormal1State
 	endEvent
 
 	event OnDefaultST()
-		Core.FemaleNormals[1] = "Actors\\Character\\Winterweight\\Female\\FemaleBody_chubby1_msn.dds"
+		Core.FemaleNormals[1] = "Winterweight\\Female\\FemaleBody_chubby1_msn.dds"
 		SetInputOptionValueST(Core.FemaleNormals[1])
 		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("The first Normal Map that will be applied to Females when they rise above the associated threshold.")
+		SetInfoText("The first Normal Map that will be applied to Females when they rise above the associated threshold. Data\\Textures\\Actors\\Character\\ is already appended, no need to write that part of the path.")
 	endEvent
 endState
 
@@ -473,7 +507,7 @@ state FemaleNormal2State
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("The second Normal Map that will be applied to Females when they rise above the associated threshold.")
+		SetInfoText("The second Normal Map that will be applied to Females when they rise above the associated threshold. Data\\Textures\\Actors\\Character\\ is already appended, no need to write that part of the path.")
 	endEvent
 endState
 
@@ -489,13 +523,13 @@ state FemaleArgonianNormal0State
 	endEvent
 
 	event OnDefaultST()
-		Core.FemaleArgonianNormals[0] = "Actors\\Character\\argonianfemale\\argonianfemalebody_msn.dds"
+		Core.FemaleArgonianNormals[0] = "argonianfemale\\argonianfemalebody_msn.dds"
 		SetInputOptionValueST(Core.FemaleArgonianNormals[0])
 		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("The default Normal Map that will be applied to Argonian Females when they drop below the thresholds for any higher Normals.")
+		SetInfoText("The default Normal Map that will be applied to Argonian Females when they drop below the thresholds for any higher Normals. Data\\Textures\\Actors\\Character\\ is already appended, no need to write that part of the path.")
 	endEvent
 endState
 
@@ -517,7 +551,7 @@ state FemaleArgonianNormal1State
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("The first Normal Map that will be applied to Argonian Females when they rise above the associated threshold.")
+		SetInfoText("The first Normal Map that will be applied to Argonian Females when they rise above the associated threshold. Data\\Textures\\Actors\\Character\\ is already appended, no need to write that part of the path.")
 	endEvent
 endState
 
@@ -539,7 +573,7 @@ state FemaleArgonianNormal2State
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("The second Normal Map that will be applied to Argonian Females when they rise above the associated threshold.")
+		SetInfoText("The second Normal Map that will be applied to Argonian Females when they rise above the associated threshold. Data\\Textures\\Actors\\Character\\ is already appended, no need to write that part of the path.")
 	endEvent
 endState
 
@@ -555,13 +589,13 @@ state FemaleKhajiitNormal0State
 	endEvent
 
 	event OnDefaultST()
-		Core.FemaleKhajiitNormals[0] = "Actors\\Character\\khajiitfemale\\femalebody_msn.dds"
+		Core.FemaleKhajiitNormals[0] = "khajiitfemale\\femalebody_msn.dds"
 		SetInputOptionValueST(Core.FemaleKhajiitNormals[0])
 		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("The default Normal Map that will be applied to Khajiit Females when they drop below the thresholds for any higher Normals.")
+		SetInfoText("The default Normal Map that will be applied to Khajiit Females when they drop below the thresholds for any higher Normals. Data\\Textures\\Actors\\Character\\ is already appended, no need to write that part of the path.")
 	endEvent
 endState
 
@@ -583,7 +617,7 @@ state FemaleKhajiitNormal1State
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("The first Normal Map that will be applied to Khajiit Females when they rise above the associated threshold.")
+		SetInfoText("The first Normal Map that will be applied to Khajiit Females when they rise above the associated threshold. Data\\Textures\\Actors\\Character\\ is already appended, no need to write that part of the path.")
 	endEvent
 endState
 
@@ -605,7 +639,7 @@ state FemaleKhajiitNormal2State
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("The second Normal Map that will be applied to Khajiit Females when they rise above the associated threshold.")
+		SetInfoText("The second Normal Map that will be applied to Khajiit Females when they rise above the associated threshold. Data\\Textures\\Actors\\Character\\ is already appended, no need to write that part of the path.")
 	endEvent
 endState
 
@@ -621,13 +655,13 @@ state MaleNormal0State
 	endEvent
 
 	event OnDefaultST()
-		Core.MaleNormals[0] = "Actors\\Character\\Male\\MaleBody_1_msn.dds"
+		Core.MaleNormals[0] = "Male\\MaleBody_1_msn.dds"
 		SetInputOptionValueST(Core.MaleNormals[0])
 		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("The default Normal Map that will be applied to Males when they drop below the thresholds for any higher Normals.")
+		SetInfoText("The default Normal Map that will be applied to Males when they drop below the thresholds for any higher Normals. Data\\Textures\\Actors\\Character\\ is already appended, no need to write that part of the path.")
 	endEvent
 endState
 
@@ -649,7 +683,7 @@ state MaleNormal1State
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("The first Normal Map that will be applied to Males when they rise above the associated threshold.")
+		SetInfoText("The first Normal Map that will be applied to Males when they rise above the associated threshold. Data\\Textures\\Actors\\Character\\ is already appended, no need to write that part of the path.")
 	endEvent
 endState
 
@@ -671,7 +705,7 @@ state MaleNormal2State
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("The second Normal Map that will be applied to Males when they rise above the associated threshold.")
+		SetInfoText("The second Normal Map that will be applied to Males when they rise above the associated threshold. Data\\Textures\\Actors\\Character\\ is already appended, no need to write that part of the path.")
 	endEvent
 endState
 
@@ -687,13 +721,13 @@ state MaleArgonianNormal0State
 	endEvent
 
 	event OnDefaultST()
-		Core.MaleArgonianNormals[0] = "Actors\\Character\\argonianmale\\argonianmalebody_msn.dds"
+		Core.MaleArgonianNormals[0] = "argonianmale\\argonianmalebody_msn.dds"
 		SetInputOptionValueST(Core.MaleArgonianNormals[0])
 		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("The default Normal Map that will be applied to Argonian Males when they drop below the thresholds for any higher Normals.")
+		SetInfoText("The default Normal Map that will be applied to Argonian Males when they drop below the thresholds for any higher Normals. Data\\Textures\\Actors\\Character\\ is already appended, no need to write that part of the path.")
 	endEvent
 endState
 
@@ -715,7 +749,7 @@ state MaleArgonianNormal1State
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("The first Normal Map that will be applied to Argonian Males when they rise above the associated threshold.")
+		SetInfoText("The first Normal Map that will be applied to Argonian Males when they rise above the associated threshold. Data\\Textures\\Actors\\Character\\ is already appended, no need to write that part of the path.")
 	endEvent
 endState
 
@@ -737,7 +771,7 @@ state MaleArgonianNormal2State
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("The second Normal Map that will be applied to Argonian Males when they rise above the associated threshold.")
+		SetInfoText("The second Normal Map that will be applied to Argonian Males when they rise above the associated threshold. Data\\Textures\\Actors\\Character\\ is already appended, no need to write that part of the path.")
 	endEvent
 endState
 
@@ -753,13 +787,13 @@ state MaleKhajiitNormal0State
 	endEvent
 
 	event OnDefaultST()
-		Core.MaleKhajiitNormals[0] = "Actors\\Character\\khajiitmale\\malebody_msn.dds"
+		Core.MaleKhajiitNormals[0] = "khajiitmale\\malebody_msn.dds"
 		SetInputOptionValueST(Core.MaleKhajiitNormals[0])
 		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("The default Normal Map that will be applied to Khajiit Males when they drop below the thresholds for any higher Normals.")
+		SetInfoText("The default Normal Map that will be applied to Khajiit Males when they drop below the thresholds for any higher Normals. Data\\Textures\\Actors\\Character\\ is already appended, no need to write that part of the path.")
 	endEvent
 endState
 
@@ -781,7 +815,7 @@ state MaleKhajiitNormal1State
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("The first Normal Map that will be applied to Khajiit Males when they rise above the associated threshold.")
+		SetInfoText("The first Normal Map that will be applied to Khajiit Males when they rise above the associated threshold. Data\\Textures\\Actors\\Character\\ is already appended, no need to write that part of the path.")
 	endEvent
 endState
 
@@ -803,7 +837,7 @@ state MaleKhajiitNormal2State
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("The second Normal Map that will be applied to Khajiit Males when they rise above the associated threshold.")
+		SetInfoText("The second Normal Map that will be applied to Khajiit Males when they rise above the associated threshold. Data\\Textures\\Actors\\Character\\ is already appended, no need to write that part of the path.")
 	endEvent
 endState
 
@@ -944,9 +978,53 @@ state NPCsEnabledState
 	endEvent
 endstate
 
+state WarmthPerkState
+	event OnSelectST()
+		SurvivalPerkEnabled = !SurvivalPerkEnabled
+		setToggleOptionValueST(SurvivalPerkEnabled)
+	endEvent
+	event OnDefaultST()
+		SurvivalPerkEnabled = true
+		setToggleOptionValueST(SurvivalPerkEnabled)
+	endEvent
+	event OnHighlightST()
+		SetInfoText("Confers a perk while you're at least 75% of the way to your Maximum Weight value, which gives you bonus Warmth Rating, making you feel the cold less.")
+	endEvent
+endstate
+
+state StaminaPerkState
+	event OnSelectST()
+		StaminaPerkEnabled = !StaminaPerkEnabled
+		setToggleOptionValueST(StaminaPerkEnabled)
+	endEvent
+	event OnDefaultST()
+		StaminaPerkEnabled = true
+		setToggleOptionValueST(StaminaPerkEnabled)
+	endEvent
+	event OnHighlightST()
+		SetInfoText("Reduces while you're at least 75% of the way to your Maximum Weight value.")
+	endEvent
+endstate
+
 state ArmNodeEnabledState
 	event OnSelectST()
 		Core.ArmNodeChanges = !Core.ArmNodeChanges
+		Int iIndex = 0
+		If Core.ArmNodeChanges == False
+			While iIndex < Core.Gainers.Length
+				If Core.Gainers[iIndex] != None
+					Core.ArmNodeRemove(Core.Gainers[iIndex])
+				EndIf
+				iIndex += 1
+			EndWhile
+		ElseIf Core.ArmNodeChanges == True
+			While iIndex < Core.Gainers.Length
+				If Core.Gainers[iIndex] != None
+					Core.ArmNodeUpdate(Core.Gainers[iIndex], StorageUtil.GetFloatValue(Core.Gainers[iIndex], MODKEY, 0.0))
+				EndIf
+				iIndex += 1
+			EndWhile
+		EndIf
 		setToggleOptionValueST(Core.ArmNodeChanges)
 		Core.ArmNodeUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
 	endEvent
@@ -962,6 +1040,22 @@ endstate
 state ThighNodeEnabledState
 	event OnSelectST()
 		Core.ThighNodeChanges = !Core.ThighNodeChanges
+		Int iIndex = 0
+		If Core.ThighNodeChanges == False
+			While iIndex < Core.Gainers.Length
+				If Core.Gainers[iIndex] != None
+					Core.ThighNodeRemove(Core.Gainers[iIndex])
+				EndIf
+				iIndex += 1
+			EndWhile
+		ElseIf Core.ThighNodeChanges == True
+			While iIndex < Core.Gainers.Length
+				If Core.Gainers[iIndex] != None
+					Core.ThighNodeUpdate(Core.Gainers[iIndex], StorageUtil.GetFloatValue(Core.Gainers[iIndex], MODKEY, 0.0))
+				EndIf
+				iIndex += 1
+			EndWhile
+		EndIf
 		setToggleOptionValueST(Core.ThighNodeChanges)
 		Core.ThighNodeUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
 	endEvent
@@ -977,6 +1071,22 @@ endstate
 state TailNodeEnabledState
 	event OnSelectST()
 		Core.TailNodeChanges = !Core.TailNodeChanges
+		Int iIndex = 0
+		If Core.TailNodeChanges == False
+			While iIndex < Core.Gainers.Length
+				If Core.Gainers[iIndex] != None
+					Core.TailNodeRemove(Core.Gainers[iIndex])
+				EndIf
+				iIndex += 1
+			EndWhile
+		ElseIf Core.TailNodeChanges == True
+			While iIndex < Core.Gainers.Length
+				If Core.Gainers[iIndex] != None
+					Core.TailNodeUpdate(Core.Gainers[iIndex], StorageUtil.GetFloatValue(Core.Gainers[iIndex], MODKEY, 0.0))
+				EndIf
+				iIndex += 1
+			EndWhile
+		EndIf
 		setToggleOptionValueST(Core.TailNodeChanges)
 		Core.TailNodeUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
 	endEvent
@@ -1166,6 +1276,56 @@ state MinimumWeightState
 
 	event OnHighlightST()
 		;SetInfoText("The minimum Weight can be.")
+	endEvent
+endState
+
+state WarmthAmountState
+	Event OnSliderOpenST()
+		SetSliderDialogStartValue(WarmthAmount)
+		SetSliderDialogDefaultValue(30.0)
+		SetSliderDialogRange(1.0, 100.0)
+		SetSliderDialogInterval(1.0)
+	endEvent
+
+	event OnSliderAcceptST(float a_value)
+		WarmthAmount = a_value as Int
+		WarmthSpell.SetNthEffectMagnitude(0, WarmthAmount)
+		PlayerRef.RemoveSpell(WarmthSpell)
+		PlayerRef.AddSpell(WarmthSpell, False)
+		SetSliderOptionValueST(a_value, "{0} Warmth")
+	endEvent
+
+	event OnDefaultST()
+		SetSliderOptionValueST(WarmthAmount, "{0} Warmth")
+	endEvent
+
+	event OnHighlightST()
+		SetInfoText("The amount of Warmth Rating given by the Warmth perk while you're overweight. For reference, particularly warm furred armor torsos give 54 Warmth and most regular armor torsos give 27, with particularly cold armor giving only 17.")
+	endEvent
+endState
+
+state StaminaAmountState
+	Event OnSliderOpenST()
+		SetSliderDialogStartValue(StaminaAmount)
+		SetSliderDialogDefaultValue(30.0)
+		SetSliderDialogRange(1.0, 100.0)
+		SetSliderDialogInterval(1.0)
+	endEvent
+
+	event OnSliderAcceptST(float a_value)
+		StaminaAmount = a_value as Int
+		StaminaSpell.SetNthEffectMagnitude(0, StaminaAmount)
+		PlayerRef.RemoveSpell(StaminaSpell)
+		PlayerRef.AddSpell(StaminaSpell, False)
+		SetSliderOptionValueST(a_value, "{0} Stamina")
+	endEvent
+
+	event OnDefaultST()
+		SetSliderOptionValueST(StaminaAmount, "{0} Stamina")
+	endEvent
+
+	event OnHighlightST()
+		SetInfoText("The amount of Stamina taken.")
 	endEvent
 endState
 
@@ -1464,6 +1624,29 @@ state FoodGainState
 		SetInfoText("How much weight food items give. Is multiplied by item weight, so food weighing 0.5 with a Base Gain of 0.10 would give 0.05 weight. /n Foods that are marked as High Value are worth double, and foods marked as No Value give no weight gain.")
 	endEvent
 endState
+
+state VampireGainState
+	Event OnSliderOpenST()
+		SetSliderDialogStartValue(Core.VampireBaseGain)
+		SetSliderDialogDefaultValue(0.30)
+		SetSliderDialogRange(0.001, 5.0)
+		SetSliderDialogInterval(0.001)
+	endEvent
+
+	event OnSliderAcceptST(float a_value)
+		Core.VampireBaseGain = a_value
+		SetSliderOptionValueST(a_value, "{3} / Feeding")
+	endEvent
+
+	event OnDefaultST()
+		SetSliderOptionValueST(Core.VampireBaseGain, "{3} / Feeding")
+	endEvent
+
+	event OnHighlightST()
+		SetInfoText("How much weight feeding on a person as a Vampire gives.")
+	endEvent
+endState
+
 
 state VoreGainState
 	Event OnSliderOpenST()
