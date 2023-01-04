@@ -30,7 +30,7 @@ Event OnStoryRemoveFromPlayer(ObjectReference akOwner, ObjectReference akItem, L
             Int iNearbyFoods = CloseFood.Length - 1
             ActorBase PlayerBase = PlayerRef.GetActorBase()
             While iNearbyFoods > -1
-                utility.wait(0.015)
+                utility.wait(0.007)
                 If CloseFood[iNearbyFoods].GetActorOwner() == PlayerBase || CloseFood[iNearbyFoods].GetParentCell().GetActorOwner() == PlayerBase || CloseFood[iNearbyFoods].GetFactionOwner() == None && CloseFood[iNearbyFoods].GetParentCell().GetFactionOwner() == None && CloseFood[iNearbyFoods].GetActorOwner() == None && CloseFood[iNearbyFoods].GetParentCell().GetActorOwner() == None
                     CloseFood[iNearbyFoods].Activate(kCompanion, true)
                     ;kCompanion.AddItem(CloseFood[iNearbyFoods].GetBaseObject(), 1, true)

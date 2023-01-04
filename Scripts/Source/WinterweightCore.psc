@@ -11,6 +11,7 @@ Import WinterweightLogging
 Actor Property PlayerRef Auto
 Armor Property HandsArmor Auto
 Armor Property TailArmor Auto
+Armor Property WeightedTailArmor Auto
 WinterweightMCM Property WinterMCM Auto
 
 String[] Property FemaleSliderStrings auto
@@ -42,6 +43,7 @@ Bool Property TailNodeChanges = False Auto Hidden
 Bool Property FemaleNormalChanges = True Auto Hidden
 Bool Property MaleNormalChanges = True Auto Hidden
 Bool Property WeightLossEnabled = True Auto Hidden
+Bool Property WeightedArgonianTails = False Auto Hidden
 Float[] Property FemaleNormalBreakpoints Auto Hidden
 Float[] Property MaleNormalBreakpoints Auto Hidden
 Float Property WeightLoss = 0.03 Auto Hidden
@@ -130,7 +132,11 @@ Event OnInit()
 	If !po3_sksefunctions.IsSurvivalModeActive()
 		WinterMCM.SurvivalPerkEnabled = False
 	EndIf
-	
+
+	If Game.IsPluginInstalled("ArgonianWeightSliderAffectedTails.esp")
+		WeightedArgonianTails = True
+	EndIf
+
 	RegisterForModEvent("Winterweight_ItemConsume", "ItemConsume")
 	CheckRefactor()	;Checks for Devourment Refactor.
 	RunPatchups()
@@ -403,6 +409,8 @@ Function ResetActorWeight(Actor target)
 
 		NiOverride.ClearBodyMorphKeys(target, MODKEY)
 		NiOverride.ClearBodyMorphKeys(target, MODKEY)	;Call twice, since sometimes this one seems to fail on first call.
+		bool isFemale = IsFemale(target)
+		NiOverride.RemoveSkinOverride(target, isFemale, false, 0x04, 9, 1)
 		NiOverride.UpdateModelWeight(target)
 
 		StorageUtil.UnSetFloatValue(target, MODKEY)
@@ -504,7 +512,9 @@ Function FullFeatureUpdate(Actor akTarget, Float afWeight)
 		ArmNodeUpdate(akTarget, afWeight)
 		ThighNodeUpdate(akTarget, afWeight)
 		TailNodeUpdate(akTarget, afWeight)
-		NormalMapUpdate(akTarget, afWeight)
+		If FemaleNormalChanges || MaleNormalChanges
+			NormalMapUpdate(akTarget, afWeight)
+		EndIf
 	EndIf
 
 EndFunction
@@ -552,14 +562,14 @@ Function BodyMorphUpdate(Actor akTarget, Float afWeight)
 EndFunction
 
 Function NormalMapUpdate(Actor akTarget, Float afWeight)
+{ This function has the capacity to be very dangerous, do NOT call it unless you are sure you want to change a Normal. }
 
-	If akTarget.HasKeywordString("ActorTypeNPC") && (FemaleNormalChanges || MaleNormalChanges)
-
-		String sSelectedNormal
-		String StartingTex = NiOverride.GetSkinOverrideString(akTarget, IsFemale, false, 0x04, 9, 1)
+	String sSelectedNormal
+	If akTarget.HasKeywordString("ActorTypeNPC")
 		Int TargetRace = akTarget.GetLeveledActorBase().GetRace().GetFormID()
 		bool isFemale = IsFemale(akTarget)
 		If isFemale && FemaleNormalChanges
+			String StartingTex = NiOverride.GetSkinOverrideString(akTarget, IsFemale, false, 0x04, 9, 1)
 			int iIndex = FemaleNormals.Length - 1
 			While iIndex > -1
 				sSelectedNormal = FemaleNormals[iIndex]
@@ -573,9 +583,15 @@ Function NormalMapUpdate(Actor akTarget, Float afWeight)
 					If !Hands
 						akTarget.EquipItem(HandsArmor, false, true)
 					EndIf
-					;If target race is Argonian, ArgonianVampire, Khajiit or KhajiitVampire.
-					If TargetRace == 79680 || TargetRace == 559162 || TargetRace == 79685 || TargetRace == 559173
-						akTarget.EquipItem(TailArmor, false, true)		
+					;If target race is Argonian, ArgonianVampire
+					If TargetRace == 79680 || TargetRace == 559162 ;|| TargetRace == 79685 || TargetRace == 559173
+						If WeightedArgonianTails
+							akTarget.EquipItem(WeightedTailArmor, false, true)	
+						Else
+							akTarget.EquipItem(TailArmor, false, true)	
+						EndIf
+					ElseIf TargetRace == 79685 || TargetRace == 559173	;Khajiit or KhajiitVampire.
+						akTarget.EquipItem(TailArmor, false, true)	
 					EndIf
 					NiOverride.AddSkinOverrideString(akTarget, IsFemale, false, 0x04, 9, 1, "Actors\\Character\\" + sSelectedNormal, True)
 					
@@ -588,7 +604,11 @@ Function NormalMapUpdate(Actor akTarget, Float afWeight)
 				EndIf
 				iIndex -= 1
 			EndWhile
+			If StartingTex != sSelectedNormal
+				NiOverride.ApplySkinOverrides(akTarget)
+			EndIf
 		ElseIf !isFemale && MaleNormalChanges
+			String StartingTex = NiOverride.GetSkinOverrideString(akTarget, IsFemale, false, 0x04, 9, 1)
 			int iIndex = MaleNormals.Length - 1
 			While iIndex > -1
 				sSelectedNormal = MaleNormals[iIndex]
@@ -611,13 +631,19 @@ Function NormalMapUpdate(Actor akTarget, Float afWeight)
 				EndIf
 				iIndex -= 1
 			EndWhile
-		EndIf
-		;NiOverride.UpdateModelWeight(akTarget)
-		If StartingTex != sSelectedNormal
-			NiOverride.ApplySkinOverrides(akTarget)
+			If StartingTex != sSelectedNormal
+				NiOverride.ApplySkinOverrides(akTarget)
+			EndIf
 		EndIf
 	EndIf
 
+EndFunction
+
+Function NormalMapRemove(Actor akTarget)
+	If akTarget.HasKeywordString("ActorTypeNPC")
+		bool isFemale = IsFemale(akTarget)
+		NiOverride.RemoveSkinOverride(akTarget, isFemale, false, 0x04, 9, 1)
+	EndIf
 EndFunction
 
 Function ThighNodeUpdate(Actor akTarget, Float afWeight)

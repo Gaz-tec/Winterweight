@@ -53,7 +53,7 @@ endEvent
 /;
 
 int function GetVersion()
-	return 104
+	return 105
 endFunction
 
 Event OnVersionUpdate(int newVersion)
@@ -61,22 +61,29 @@ Event OnVersionUpdate(int newVersion)
 EndEvent
 
 Function Upgrade(int oldVersion, int newVersion)
-    if newVersion >= 104 && oldVersion < 104
-		Utility.Wait(2.0)
-        Core.EventRegistration()	;Version 104 added sleep logic, so register for sleep.
-		Core.FemaleNormals[0] = "Female\\FemaleBody_1_msn.dds"	;104 changed texture formatting, so reset.
-		Core.FemaleNormals[1] = "Winterweight\\Female\\FemaleBody_chubby1_msn.dds"
-		Core.FemaleArgonianNormals[0] = "argonianfemale\\argonianfemalebody_msn.dds"
-		Core.FemaleKhajiitNormals[0] = "khajiitfemale\\femalebody_msn.dds"
-		Core.MaleNormals[0] = "Male\\MaleBody_1_msn.dds"
-		Core.MaleArgonianNormals[0] = "argonianmale\\argonianmalebody_msn.dds"
-		Core.MaleKhajiitNormals[0] = "khajiitmale\\malebody_msn.dds"
-		If !po3_sksefunctions.IsSurvivalModeActive()
-			SurvivalPerkEnabled = False
+	If newVersion > oldVersion
+		if newVersion >= 104 && oldVersion < 104
+			Utility.Wait(2.0)
+			Core.EventRegistration()	;Version 104 added sleep logic, so register for sleep.
+			Core.FemaleNormals[0] = "Female\\FemaleBody_1_msn.dds"	;104 changed texture formatting, so reset.
+			Core.FemaleNormals[1] = "Winterweight\\Female\\FemaleBody_chubby1_msn.dds"
+			Core.FemaleArgonianNormals[0] = "argonianfemale\\argonianfemalebody_msn.dds"
+			Core.FemaleKhajiitNormals[0] = "khajiitfemale\\femalebody_msn.dds"
+			Core.MaleNormals[0] = "Male\\MaleBody_1_msn.dds"
+			Core.MaleArgonianNormals[0] = "argonianmale\\argonianmalebody_msn.dds"
+			Core.MaleKhajiitNormals[0] = "khajiitmale\\malebody_msn.dds"
+			If !po3_sksefunctions.IsSurvivalModeActive()
+				SurvivalPerkEnabled = False
+			EndIf
+			PlayerRef.AddSpell(WarmthSpell, False)
+			PlayerRef.AddSpell(StaminaSpell, False)
+		endif
+		If newVersion >= 105 && oldVersion < 105
+			If Game.IsPluginInstalled("ArgonianWeightSliderAffectedTails.esp")
+				Core.WeightedArgonianTails = True
+			EndIf
 		EndIf
-		PlayerRef.AddSpell(WarmthSpell, False)
-		PlayerRef.AddSpell(StaminaSpell, False)
-    endif
+	EndIf
 endFunction
 
 event OnConfigInit()
@@ -174,6 +181,11 @@ Event OnPageReset(string page)
 		endif
 		AddToggleOptionST("DropFeedState", "Companions Eat Dropped Food", Core.DropFeeding.GetValue() as Bool, iDropFeedFlag)
 		AddToggleOptionST("DropFeedAllState", "NPCs Eat Dropped Food", Core.DropFeedingAll.GetValue() as Bool)
+
+		AddHeaderOption("Normal Fixes")
+		AddEmptyOption()
+		AddToggleOptionST("ArgonianWeightedTailState", "Argonian Weighted Tails", Core.WeightedArgonianTails)
+		AddEmptyOption()
 
 		AddHeaderOption("Normal Map Swaps")
 		AddEmptyOption()
@@ -1099,6 +1111,20 @@ state TailNodeEnabledState
 	endEvent
 endstate
 
+state ArgonianWeightedTailState
+	event OnSelectST()
+		Core.WeightedArgonianTails = !Core.WeightedArgonianTails
+		setToggleOptionValueST(Core.WeightedArgonianTails)
+	endEvent
+	event OnDefaultST()
+		Core.WeightedArgonianTails = False
+		setToggleOptionValueST(Core.WeightedArgonianTails)
+	endEvent
+	event OnHighlightST()
+		SetInfoText("If you use a mod that makes Argonian Tails weight-enabled, toggle this, it will make Winterweight use an alternate tail addon.")
+	endEvent
+endstate
+
 state DropFeedState
 	event OnSelectST()
 		If Core.DropFeeding.GetValue() == 0.0
@@ -1145,14 +1171,29 @@ state FemaleNormalsEnabledState
 	event OnSelectST()
 		Core.FemaleNormalChanges = !Core.FemaleNormalChanges
 		setToggleOptionValueST(Core.FemaleNormalChanges)
-		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
+		Int iIndex = 0
+		If Core.FemaleNormalChanges == False
+			While iIndex < Core.Gainers.Length
+				If Core.Gainers[iIndex] != None && Core.IsFemale(Core.Gainers[iIndex])
+					Core.NormalMapRemove(Core.Gainers[iIndex])
+				EndIf
+				iIndex += 1
+			EndWhile
+		ElseIf Core.FemaleNormalChanges == True
+			While iIndex < Core.Gainers.Length
+				If Core.Gainers[iIndex] != None && Core.IsFemale(Core.Gainers[iIndex])
+					Core.NormalMapUpdate(Core.Gainers[iIndex], StorageUtil.GetFloatValue(Core.Gainers[iIndex], MODKEY, 0.0))
+				EndIf
+				iIndex += 1
+			EndWhile
+		EndIf
 	endEvent
 	event OnDefaultST()
 		Core.FemaleNormalChanges = true
 		setToggleOptionValueST(Core.FemaleNormalChanges)
 	endEvent
 	event OnHighlightST()
-		SetInfoText("If enabled, Female humans gaining weight will have extra belly roll and skin detail proportional to their weight.")
+		SetInfoText("If enabled, Female humans gaining weight will have extra belly roll and skin detail proportional to their weight. NOTE: Sometimes NiOverride Skin Overlays can be whimsical, so remember to save and reload if this acts up.")
 	endEvent
 endstate
 
@@ -1160,6 +1201,22 @@ state MaleNormalsEnabledState
 	event OnSelectST()
 		Core.MaleNormalChanges = !Core.MaleNormalChanges
 		setToggleOptionValueST(Core.MaleNormalChanges)
+		Int iIndex = 0
+		If Core.MaleNormalChanges == False
+			While iIndex < Core.Gainers.Length
+				If Core.Gainers[iIndex] != None && !Core.IsFemale(Core.Gainers[iIndex])
+					Core.NormalMapRemove(Core.Gainers[iIndex])
+				EndIf
+				iIndex += 1
+			EndWhile
+		ElseIf Core.MaleNormalChanges == True
+			While iIndex < Core.Gainers.Length
+				If Core.Gainers[iIndex] != None && !Core.IsFemale(Core.Gainers[iIndex])
+					Core.NormalMapUpdate(Core.Gainers[iIndex], StorageUtil.GetFloatValue(Core.Gainers[iIndex], MODKEY, 0.0))
+				EndIf
+				iIndex += 1
+			EndWhile
+		EndIf
 		Core.NormalMapUpdate(PlayerRef, StorageUtil.GetFloatValue(PlayerRef, MODKEY, 0.0))
 	endEvent
 	event OnDefaultST()
@@ -1167,7 +1224,7 @@ state MaleNormalsEnabledState
 		setToggleOptionValueST(Core.MaleNormalChanges)
 	endEvent
 	event OnHighlightST()
-		SetInfoText("If enabled, Male humans gaining weight will have extra belly roll and skin detail proportional to their weight.")
+		SetInfoText("If enabled, Male humans gaining weight will have extra belly roll and skin detail proportional to their weight. NOTE: Sometimes NiOverride Skin Overlays can be whimsical, so remember to save and reload if this acts up.")
 	endEvent
 endstate
 
@@ -1530,11 +1587,11 @@ state WeightRateState
 
 	event OnSliderAcceptST(float a_value)
 		Core.WeightRate = a_value
-		SetSliderOptionValueST(a_value, "{2}")
+		SetSliderOptionValueST(a_value, "{2} In-Game Hours")
 	endEvent
 
 	event OnDefaultST()
-		SetSliderOptionValueST(Core.WeightRate, "{2}")
+		SetSliderOptionValueST(Core.WeightRate, "{2} In-Game Hours")
 	endEvent
 
 	event OnHighlightST()
@@ -1599,7 +1656,7 @@ state PotionGainState
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("How much weight Potions give. Is multiplied by Potion weight, so a potion weighing 0.5 with a Base Gain of 0.02 would give 0.01 weight. /n I prefer to keep this low since all vanilla potions weigh 0.5 anyways.")
+		SetInfoText("How much weight Potions give. Is multiplied by Potion weight, so a potion weighing 0.5 with a Base Gain of 0.02 would give 0.01 weight. I prefer to keep this low since all vanilla potions weigh 0.5 anyways.")
 	endEvent
 endState
 
@@ -1621,7 +1678,7 @@ state FoodGainState
 	endEvent
 
 	event OnHighlightST()
-		SetInfoText("How much weight food items give. Is multiplied by item weight, so food weighing 0.5 with a Base Gain of 0.10 would give 0.05 weight. /n Foods that are marked as High Value are worth double, and foods marked as No Value give no weight gain.")
+		SetInfoText("How much weight food items give. Is multiplied by item weight, so food weighing 0.5 with a Base Gain of 0.10 would give 0.05 weight. Foods that are marked as High Value are worth double, and foods marked as No Value give no weight gain.")
 	endEvent
 endState
 
